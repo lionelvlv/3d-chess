@@ -1453,6 +1453,43 @@ function tickSelRing() {
 }
 
 // ── PIECE MATERIALS (MeshPhysicalMaterial + clearcoat) ──
+// ── Fresnel rim ShaderMaterial ──────────────────────────
+const FRAG_VERT = `
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+  void main(){
+    vNormal   = normalize(normalMatrix * normal);
+    vec4 mvPos = modelViewMatrix * vec4(position,1.0);
+    vViewDir   = normalize(-mvPos.xyz);
+    gl_Position = projectionMatrix * mvPos;
+  }`;
+const FRAG_FRAG = `
+  uniform vec3  uColor;
+  uniform float uPower;
+  uniform float uStr;
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+  void main(){
+    float f = pow(1.0 - max(dot(vNormal, vViewDir), 0.0), uPower);
+    gl_FragColor = vec4(uColor * f * uStr, f * uStr);
+  }`;
+
+function mkFresnelMat(isW){
+  return new THREE.ShaderMaterial({
+    uniforms:{
+      uColor:{ value: isW ? new THREE.Color(0xffffff) : new THREE.Color(0xff88ff) },
+      uPower:{ value: isW ? 2.2 : 2.0 },
+      uStr:  { value: isW ? 0.9  : 1.1  },
+    },
+    vertexShader:   FRAG_VERT,
+    fragmentShader: FRAG_FRAG,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.FrontSide,
+  });
+}
+
 function mkMat(isW) {
   return new THREE.MeshStandardMaterial({
     color: isW ? 0xeee8ff : 0x110022,
@@ -1463,8 +1500,27 @@ function mkMat(isW) {
   });
 }
 function mkPiece(type,color) {
-  const isW=color===W, mat=mkMat(isW), g=new THREE.Group();
-  const add=(geo,x=0,y=0,z=0)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;g.add(m)};
+  const isW=color===W, mat=mkMat(isW), fMat=mkFresnelMat(isW), g=new THREE.Group();
+  // Outline: BackSide enlarged for crisp silhouette
+  const outlineMat=new THREE.MeshBasicMaterial({
+    color: isW ? 0x220044 : 0xffaaff,
+    side: THREE.BackSide,
+  });
+  const add=(geo,x=0,y=0,z=0)=>{
+    // Main matte mesh
+    const m=new THREE.Mesh(geo,mat);
+    m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;g.add(m);
+    // Outline mesh — BackSide scaled up 8%
+    const ol=new THREE.Mesh(geo,outlineMat);
+    ol.position.set(x,y,z);ol.scale.setScalar(1.08);
+    ol.userData.isOutline=true;
+    g.add(ol);
+    // Fresnel rim overlay — same scale, additive blend
+    const fr=new THREE.Mesh(geo,fMat);
+    fr.position.set(x,y,z);
+    fr.userData.isOutline=true; // also exclude from raycast
+    g.add(fr);
+  };
   if(type===PT.P){add(new THREE.CylinderGeometry(.31,.37,.09,18),0,.045);add(new THREE.CylinderGeometry(.145,.205,.27,16),0,.225);add(new THREE.SphereGeometry(.2,18,12),0,.5)}
   else if(type===PT.R){add(new THREE.CylinderGeometry(.33,.39,.09,18),0,.045);add(new THREE.CylinderGeometry(.22,.28,.41,16),0,.295);add(new THREE.CylinderGeometry(.3,.24,.09,16),0,.545);add(new THREE.CylinderGeometry(.175,.175,.04,16),0,.615);for(let i=0;i<4;i++){const a=i*Math.PI/2+Math.PI/4;add(new THREE.BoxGeometry(.1,.18,.1),Math.cos(a)*.2,.695,Math.sin(a)*.2)}}
   else if(type===PT.N){add(new THREE.CylinderGeometry(.33,.39,.09,18),0,.045);add(new THREE.CylinderGeometry(.175,.255,.27,16),0,.225);add(new THREE.BoxGeometry(.26,.41,.18),0,.555);add(new THREE.BoxGeometry(.2,.16,.33),0,.74,.08);add(new THREE.SphereGeometry(.115,14,10),0,.835,-.04)}
@@ -1568,14 +1624,14 @@ function pulseKing(r,f) { kpData={r,f}; kpT=0; }
 function stopPulse() {
   if(!kpData) return;
   const d=getPC(kpData.r,kpData.f);
-  if(d){const isW=d.c===W;d.g.traverse(m=>{if(m.isMesh){m.material.emissive.set(isW?0x220044:0x880055);m.material.emissiveIntensity=isW?.08:.15}})}
+  if(d){const isW=d.c===W;d.g.traverse(m=>{if(m.isMesh&&!m.userData.isOutline){m.material.emissive.set(isW?0x220044:0x880055);m.material.emissiveIntensity=isW?.08:.15}})}
   kpData=null;
 }
 function tickPulse() {
   if(!kpData) return; kpT+=.06;
   const d=getPC(kpData.r,kpData.f); if(!d) return;
   const v=Math.max(0,Math.sin(kpT*3)*.5+.5);
-  d.g.traverse(m=>{if(m.isMesh){m.material.emissive.set(1,0,.08*v);m.material.emissiveIntensity=.25+v*1.3}});
+  d.g.traverse(m=>{if(m.isMesh&&!m.userData.isOutline){m.material.emissive.set(1,0,.08*v);m.material.emissiveIntensity=.25+v*1.3}});
 }
 
 // ── BOB (selected piece idle animation) ──
@@ -1594,7 +1650,7 @@ function raycast(e) {
   mv2.x=((e.clientX-rect.left)/rect.width)*2-1;
   mv2.y=-((e.clientY-rect.top)/rect.height)*2+1;
   rc.setFromCamera(mv2,camera);
-  const obs=[]; pieces.forEach(d=>d.g.traverse(m=>{if(m.isMesh)obs.push(m)}));
+  const obs=[]; pieces.forEach(d=>d.g.traverse(m=>{if(m.isMesh&&!m.userData.isOutline)obs.push(m)}));
   const ph=rc.intersectObjects(obs); if(ph.length){const u=ph[0].object.userData;return{r:u.r,f:u.f}}
   const sh=rc.intersectObjects(squares.flat()); if(sh.length){const u=sh[0].object.userData;return{r:u.r,f:u.f}}
   return null;
