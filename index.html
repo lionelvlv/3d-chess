@@ -1284,6 +1284,16 @@ const SFX = {
   tick()    { tone(880,.04,'square',.05); },
   lowtime() { tone(660,.06,'square',.08); tone(440,.09,'square',.05,.07); },
   timeout() { [330,294,262,220,196].forEach((f,i)=>tone(f,.35,'sawtooth',.12,i*.12)); },
+  // Menu UI sounds
+  btnClick()  { tone(660,.05,'square',.1); tone(880,.07,'square',.06,.04); },
+  btnBack()   { tone(440,.05,'square',.09); tone(330,.07,'square',.06,.04); },
+  btnStart()  { tone(880,.06,'square',.1); tone(1100,.08,'sine',.1,.05); tone(1320,.12,'sine',.09,.1); },
+  btnOnline() { tone(440,.05,'triangle',.1); tone(660,.06,'triangle',.09,.04); tone(880,.08,'sine',.1,.08); },
+  toggle()    { tone(1047,.05,'square',.07); },
+  toggleOff() { tone(523,.05,'square',.07); },
+  copyCode()  { tone(1047,.06,'sine',.1); tone(1319,.08,'sine',.08,.06); tone(1568,.1,'sine',.07,.12); },
+  error()     { tone(220,.08,'sawtooth',.12); tone(185,.12,'sawtooth',.1,.06); },
+  hover()     { tone(1200,.03,'square',.04); },
 };
 
 // ═══════════════════════════════════════════════════════
@@ -1444,15 +1454,12 @@ function tickSelRing() {
 
 // ── PIECE MATERIALS (MeshPhysicalMaterial + clearcoat) ──
 function mkMat(isW) {
-  return new THREE.MeshPhysicalMaterial({
-    color: isW ? 0xf5f0ff : 0x0e0020,
-    roughness: isW ? .18 : .12,
-    metalness: isW ? .22 : .72,
-    clearcoat: isW ? .85 : 1.0,
-    clearcoatRoughness: isW ? .12 : .05,
-    emissive: new THREE.Color(isW ? 0x220044 : 0x880055),
-    emissiveIntensity: isW ? .08 : .15,
-    
+  return new THREE.MeshStandardMaterial({
+    color: isW ? 0xeee8ff : 0x110022,
+    roughness: isW ? .92 : .88,
+    metalness: 0,
+    emissive: new THREE.Color(isW ? 0x110022 : 0x220011),
+    emissiveIntensity: .04,
   });
 }
 function mkPiece(type,color) {
@@ -1955,7 +1962,7 @@ canvas.addEventListener('click', e=>{const sq=raycast(e);if(sq)handleClick(sq.r,
 let chosenDiff=1;
 document.querySelectorAll('[data-d]').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('[data-d]').forEach(x=>x.classList.remove('active'));
-  b.classList.add('active'); chosenDiff=parseInt(b.dataset.d);
+  b.classList.add('active'); chosenDiff=parseInt(b.dataset.d); SFX.toggle();
 }));
 
 // Timer buttons (AI row)
@@ -1967,30 +1974,34 @@ document.querySelectorAll('.tc').forEach(b=>b.addEventListener('click',()=>{
   const t=parseInt(b.dataset.t);
   if(t===-1){ customRow.classList.add('visible'); chosenTimer=-1; }
   else { customRow.classList.remove('visible'); chosenTimer=t; }
+  SFX.toggle();
 }));
 
 // Online timer buttons
 let chosenOnlineTimer=0;
 document.querySelectorAll('.tc-online').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.tc-online').forEach(x=>x.classList.remove('active'));
-  b.classList.add('active'); chosenOnlineTimer=parseInt(b.dataset.t);
+  b.classList.add('active'); chosenOnlineTimer=parseInt(b.dataset.t); SFX.toggle();
 }));
 
 // Side selection (starts AI game)
 document.querySelectorAll('[data-c]').forEach(b=>b.addEventListener('click',()=>{
+  SFX.btnStart();
   let c=b.dataset.c; if(c==='r') c=Math.random()<.5?W:B;
   const ts=chosenTimer===-1?((parseInt(document.getElementById('custom-mins').value)||5)*60):chosenTimer;
   startGame('ai',c,chosenDiff,ts);
 }));
 
 document.getElementById('btn-ai').addEventListener('click',()=>{
-  document.getElementById('row-ai').classList.toggle('open');
+  const open=document.getElementById('row-ai').classList.toggle('open');
+  if(open) SFX.btnStart(); else SFX.btnBack();
 });
 
-document.getElementById('btn-online').addEventListener('click',()=>showOp('menu'));
-document.getElementById('op-back-menu').addEventListener('click',()=>showOp('none'));
-document.getElementById('op-create-btn').addEventListener('click',createRoom);
+document.getElementById('btn-online').addEventListener('click',()=>{ SFX.btnOnline(); showOp('menu'); });
+document.getElementById('op-back-menu').addEventListener('click',()=>{ SFX.btnBack(); showOp('none'); });
+document.getElementById('op-create-btn').addEventListener('click',()=>{ SFX.btnOnline(); createRoom(); });
 document.getElementById('op-join-btn').addEventListener('click',()=>{
+  SFX.btnClick();
   document.getElementById('op-code-input').value='';
   document.getElementById('op-join-status').textContent=' ';
   showOp('joining');
@@ -1998,39 +2009,50 @@ document.getElementById('op-join-btn').addEventListener('click',()=>{
 });
 document.getElementById('op-connect-btn').addEventListener('click',()=>{
   const code=document.getElementById('op-code-input').value.trim().toUpperCase();
-  if(code.length!==4){document.getElementById('op-join-status').textContent='NEED 4 LETTERS';document.getElementById('op-join-status').className='op-status err';return}
+  if(code.length!==4){SFX.error();document.getElementById('op-join-status').textContent='NEED 4 LETTERS';document.getElementById('op-join-status').className='op-status err';return}
+  SFX.btnOnline();
   joinRoom(code);
 });
 document.getElementById('op-code-input').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('op-connect-btn').click()});
 document.getElementById('op-code').addEventListener('click',()=>{
+  SFX.copyCode();
   const c=document.getElementById('op-code').textContent;
   navigator.clipboard?.writeText(c).then(()=>{
     document.getElementById('op-wait-status').textContent='COPIED!';
     document.getElementById('op-wait-status').className='op-status ok';
   }).catch(()=>{});
 });
-document.getElementById('op-cancel-wait').addEventListener('click',()=>{closePeer();showOp('none')});
-document.getElementById('op-cancel-join').addEventListener('click',()=>showOp('menu'));
+document.getElementById('op-cancel-wait').addEventListener('click',()=>{SFX.btnBack();closePeer();showOp('none')});
+document.getElementById('op-cancel-join').addEventListener('click',()=>{SFX.btnBack();showOp('menu')});
 
 document.getElementById('btn-new').addEventListener('click',()=>{
+  SFX.btnBack();
   closePeer(); stopTimerTick();
   el.landing.style.display='flex';
   el.hud.classList.remove('on'); el.go.classList.remove('on');
   document.getElementById('row-ai').classList.remove('open');
 });
 document.getElementById('btn-again').addEventListener('click',()=>{
+  SFX.btnStart();
   if(mode==='online'){closePeer();el.landing.style.display='flex';el.hud.classList.remove('on');el.go.classList.remove('on')}
   else startGame(mode,myColor,aiDiff,timerSecs);
 });
 document.getElementById('btn-menu').addEventListener('click',()=>{
+  SFX.btnBack();
   closePeer(); stopTimerTick();
   el.landing.style.display='flex';
   el.hud.classList.remove('on'); el.go.classList.remove('on');
 });
 el.promo.querySelectorAll('.pbtn').forEach(b=>b.addEventListener('click',()=>{
+  SFX.btnStart();
   el.promo.classList.remove('on');
   if(pendPromo){doExecute(pendPromo.fr,pendPromo.to,b.dataset.p);pendPromo=null}
 }));
+
+// Hover sounds on all interactive buttons
+document.querySelectorAll('.btn,.btn-sm,.obtn,.pbtn,.tc,.tc-online,[data-c],[data-d]').forEach(b=>{
+  b.addEventListener('mouseenter',()=>SFX.hover());
+});
 
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
