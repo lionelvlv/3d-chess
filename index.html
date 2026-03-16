@@ -1850,7 +1850,7 @@ const el = {
 
 function startGame(m, col, diff, tSecs=0) {
   mode=m; myColor=col; aiDiff=diff||1;
-  chess.reset(); syncBoard(chess,true);
+  chess.reset(); syncBoard(chess,true); setTimeout(orientAllKnights, 800);
   clearHL(); removeSelRing();
   selSq=null; legCache=[]; lastFr=null; lastTo=null;
   busy=false; aiOn=false; caps={w:[],b:[]};
@@ -1888,6 +1888,22 @@ function showCheckFX() {
   el.statusTxt.classList.remove('on'); void el.statusTxt.offsetWidth; el.statusTxt.classList.add('on');
   el.chkFlash.classList.remove('on');  void el.chkFlash.offsetWidth;  el.chkFlash.classList.add('on');
   setTimeout(()=>el.statusTxt.classList.remove('on'),1800);
+}
+
+// Orient all knights to face the opposing king, snapping on move completion
+function orientAllKnights() {
+  for (const [, d] of pieces) {
+    if (d.t !== PT.N) continue;
+    const targetColor = d.c === W ? B : W;
+    const king = chess._king(targetColor);
+    if (!king) continue;
+    const kPos = b2w(king.r, king.f);
+    const nPos = b2w(d.r, d.f);
+    const dx = kPos.x - nPos.x;
+    const dz = kPos.z - nPos.z;
+    // atan2 gives angle in XZ plane; Three.js Y-up, so rotate around Y
+    d.g.rotation.y = Math.atan2(dx, dz);
+  }
 }
 
 function doExecute(fr, to, prom, fromNet=false) {
@@ -1930,6 +1946,7 @@ function doExecute(fr, to, prom, fromNet=false) {
     lastFr={r:fr.r,f:fr.f}; lastTo={r:to.r,f:to.f};
     selSq=null; legCache=[]; selR=-1; selF=-1;
     removeSelRing(); el.selLabel.textContent='';
+    orientAllKnights();
     refreshHL(); updateHUD();
 
     if(status==='checkmate'||status==='stalemate'){
@@ -2133,6 +2150,7 @@ let t = 0;
 
 // Initial board display
 syncBoard(chess);
+orientAllKnights();
 
 </script>
 
