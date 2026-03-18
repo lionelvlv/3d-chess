@@ -800,6 +800,61 @@ body::before {
 }
 
 
+/* ── Music toggle — fixed corner button ── */
+#btn-music {
+  position: fixed; bottom: var(--sp-4); right: var(--sp-4);
+  z-index: 110;
+  font-family: var(--font-mono);
+  font-size: .52rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: rgba(9,9,14,.82);
+  color: var(--text-dim); cursor: pointer;
+  transition: background var(--ease), border-color var(--ease), color var(--ease);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+#btn-music:hover   { border-color: var(--border-active); color: var(--text); }
+#btn-music.music-on { border-color: var(--accent); color: var(--accent-bright); background: rgba(74,127,165,.08); }
+
+/* ── History panel copy button ── */
+#history-copy-btn {
+  margin-left: auto;
+  font-family: var(--font-mono); font-size: .44rem; letter-spacing: .08em; text-transform: uppercase;
+  padding: 1px var(--sp-1);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: transparent; color: var(--text-dim); cursor: pointer;
+  transition: color var(--ease), border-color var(--ease);
+}
+#history-copy-btn:hover { color: var(--text); border-color: var(--border-active); }
+
+/* ── Invite link row in waiting room ── */
+.invite-link-row {
+  display: flex; align-items: center; gap: var(--sp-1);
+  margin-top: var(--sp-2);
+}
+.invite-link-display {
+  font-family: var(--font-mono); font-size: .44rem;
+  color: var(--text-dim); letter-spacing: .03em;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: var(--sp-1) var(--sp-2);
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: left;
+}
+.btn-copy-link {
+  font-family: var(--font-mono); font-size: .5rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase;
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(74,127,165,.45);
+  background: transparent; color: var(--accent-bright); cursor: pointer;
+  transition: background var(--ease), border-color var(--ease);
+  white-space: nowrap; flex-shrink: 0;
+}
+.btn-copy-link:hover { background: rgba(74,127,165,.1); border-color: var(--accent); }
+
+
 /* ═══════════════════════════════════════════
    KEYFRAME LIBRARY
 ═══════════════════════════════════════════ */
@@ -871,6 +926,8 @@ body::before {
 
 <canvas id="c"></canvas>
 <div id="chkflash"></div>
+<!-- Music toggle — always visible, fixed corner -->
+<button id="btn-music" title="Toggle music">♪ Music</button>
 
 <!-- ════════════════════════════════════════════
      LANDING
@@ -945,8 +1002,13 @@ body::before {
   <div id="op-waiting" class="op-box" style="display:none">
     <div class="op-title">Room Code</div>
     <div class="op-hint">Share this with your opponent</div>
-    <div class="room-code" id="op-code" title="Tap to copy">????</div>
+    <div class="room-code" id="op-code" title="Tap to copy code">????</div>
     <div class="op-status" id="op-wait-status"><span class="spinner">↻</span> Waiting...</div>
+    <!-- Invite link — tap to copy the full join URL -->
+    <div class="invite-link-row">
+      <div class="invite-link-display" id="op-invite-url">—</div>
+      <button class="btn-copy-link" id="op-copy-link">⎘ Copy Link</button>
+    </div>
     <div class="row-label" style="margin:.6rem 0 .3rem">Clock</div>
     <div class="opt-row" style="justify-content:center;gap:4px">
       <button class="obtn active tc-online" data-t="0">Off</button>
@@ -1000,7 +1062,7 @@ body::before {
     <button class="btn-sm" id="btn-history">History</button>
     <!-- Collapsible move history panel -->
     <div id="history-panel">
-      <div id="history-header">Moves</div>
+      <div id="history-header">Moves <button id="history-copy-btn" title="Copy to clipboard">⎘ Copy</button></div>
       <div id="history-list"></div>
     </div>
   </div>
@@ -1435,35 +1497,38 @@ const SF_ELO   = { 1: 1200, 2: 1700, 3: 3200 };
 const SF_DEPTH = { 1: 6,    2: 10,   3: 15   };
 
 function initStockfish() {
-  // stockfish.js@10.0.2 on unpkg serves with correct CORS headers for Worker use.
-  // jsDelivr CDN blocked cross-origin Worker instantiation on some browsers/hosts.
+  // Try loading Stockfish as a cross-origin Worker from unpkg.
+  // If the browser blocks it (CSP, file://, or COEP policy), we fall back to minimax.
   const SF_URL = 'https://unpkg.com/stockfish.js@10.0.2/stockfish.js';
   try {
     stockfish = new Worker(SF_URL);
     stockfish.onmessage = e => handleStockfishMessage(e.data);
-    stockfish.onerror   = err => {
-      console.warn('Stockfish Worker error — falling back to minimax:', err);
+    stockfish.onerror = err => {
+      console.warn('[Chess Arcade] Stockfish Worker failed to load. Reason:', err.message || err);
+      console.info('[Chess Arcade] Falling back to built-in minimax.');
       stockfish = null;
       sfReady   = false;
       updateSfTag();
     };
     stockfish.postMessage('uci');
+    console.info('[Chess Arcade] Stockfish Worker created, waiting for uciok...');
   } catch(e) {
-    // file:// or strict CSP — minimax fallback kicks in silently
+    console.warn('[Chess Arcade] Worker() constructor failed (likely file:// or strict CSP):', e.message);
     stockfish = null;
   }
 }
 
 function handleStockfishMessage(line) {
   if (line === 'uciok') {
+    console.info('[Chess Arcade] Stockfish: uciok received, sending isready...');
     stockfish.postMessage('isready');
   } else if (line === 'readyok') {
+    console.info('[Chess Arcade] Stockfish: readyok — engine fully loaded and ready.');
     sfReady = true;
-    updateSfTag(); // engine is live — show the indicator
+    updateSfTag();
   } else if (line.startsWith('bestmove')) {
-    // e.g. "bestmove e2e4 ponder e7e5"
     const parts = line.split(' ');
-    const move  = parts[1]; // "e2e4" or "e7e8q"
+    const move  = parts[1];
     if (sfCallback && move && move !== '(none)') {
       sfCallback(move);
     } else if (sfCallback) {
@@ -1474,7 +1539,10 @@ function handleStockfishMessage(line) {
 }
 
 // Show/hide the engine status badge in the HUD.
-// Called when sfReady changes, or when a game starts.
+// Only meaningful during an AI game. updateSfTag() is called:
+//   - from handleStockfishMessage('readyok') — engine loaded
+//   - from startGame/startGameWithCustomBoard — game mode is now known
+// The readyok call fires before mode is set, so mode guards live here.
 function updateSfTag() {
   const tag = document.getElementById('sf-tag');
   if (!tag) return;
@@ -2499,6 +2567,7 @@ function createRoom() {
   id.textContent   = code;
   stat.innerHTML   = '<span class="spinner">↻</span> CONNECTING...';
   showOnlinePanel('waiting');
+  updateInviteDisplay(code); // populate the shareable link
 
   peer = new Peer(roomCodeToPeerId(code), PEER_CONFIG);
 
@@ -2770,6 +2839,7 @@ function startGame(m, col, diff, timerSeconds = 0) {
   startTimerTick();
   refreshHUD();
   updateSfTag(); // show engine status badge
+  ensureBgmStarted(); // music starts on first game if not already playing
 
   // If AI goes first (player chose black)
   if (m === 'ai' && chess.turn !== myColor) setTimeout(runAi, 1200);
@@ -3704,10 +3774,279 @@ window.addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 
+// Music toggle
+document.getElementById('btn-music').addEventListener('click', () => {
+  ensureBgmStarted(); // first click starts audio context
+  toggleBgm();
+});
+
+// Invite link copy button
+document.getElementById('op-copy-link').addEventListener('click', () => {
+  const code = document.getElementById('op-code').textContent;
+  const url  = buildInviteUrl(code);
+  navigator.clipboard?.writeText(url).then(() => {
+    const btn = document.getElementById('op-copy-link');
+    btn.textContent = '✓ Copied';
+    setTimeout(() => { btn.textContent = '⎘ Copy Link'; }, 2000);
+  }).catch(() => {});
+  SFX.copyCode();
+});
+
+// History copy-to-clipboard
+document.getElementById('history-copy-btn').addEventListener('click', () => {
+  if (!moveHistory.length) return;
+  // Build a clean text representation: "1. e4 e5\n2. Nf3 Nc6\n..."
+  const lines = [];
+  for (let i = 0; i < moveHistory.length; i += 2) {
+    const w = moveHistory[i]?.notation   || '';
+    const b = moveHistory[i+1]?.notation || '';
+    lines.push(`${Math.floor(i/2)+1}. ${w}${b ? ' ' + b : ''}`);
+  }
+  const text = lines.join('\n');
+  navigator.clipboard?.writeText(text).then(() => {
+    const btn = document.getElementById('history-copy-btn');
+    btn.textContent = '✓ Copied';
+    setTimeout(() => { btn.textContent = '⎘ Copy'; }, 2000);
+  }).catch(() => {});
+  SFX.copyCode();
+});
+
+// Start BGM on any user interaction with the landing (browser autoplay policy)
+document.getElementById('landing').addEventListener('click', ensureBgmStarted, { once: true });
+
+// Check URL for invite code on load
+checkUrlForJoinCode();
+
 
 // ═══════════════════════════════════════════
-//  13. RENDER LOOP
+//  14. BACKGROUND MUSIC — 8 procedural tracks
+//
+//  All music is synthesised via Web Audio API.
+//  No external files. Works offline and on GitHub Pages.
+//
+//  Each track is a looping phrase: melody + bass + pad.
+//  Tracks shuffle randomly. Music persists across screens.
+//  Toggle via the ♪ Music button (state saved to localStorage).
 // ═══════════════════════════════════════════
+
+let bgmCtx          = null;
+let bgmNodes        = [];     // active oscillators/gains for current track
+let bgmPlaying      = false;
+let bgmEnabled      = localStorage.getItem('bgm') !== 'off'; // default on
+let bgmTrackIndex   = 0;
+let bgmTrackTimer   = null;
+
+// ── 8 track definitions ─────────────────────
+// Each track: { bpm, rootHz, scale[], melodySteps[], bassSteps[], padIntervals[] }
+// scale = semitone offsets from root; melodySteps/bassSteps = [noteIdx, durationBeats]
+// padIntervals = chord intervals played as sustained background
+
+const BGM_TRACKS = [
+  { // 1 — Dark waltz (minor, slow)
+    bpm: 66, rootHz: 110, scale: [0,2,3,5,7,8,10],
+    melody: [[0,1],[2,1],[4,.5],[3,.5],[2,2],[5,1],[4,1],[3,2]],
+    bass:   [[0,2],[4,2],[3,2],[5,2]],
+    pad:    [0,7,10],
+  },
+  { // 2 — Tense minor (fast arpeggio)
+    bpm: 120, rootHz: 82.4, scale: [0,2,3,5,7,8,11],
+    melody: [[0,.5],[2,.5],[4,.5],[7,.5],[4,.5],[2,.5],[0,1],[5,.5],[3,.5]],
+    bass:   [[0,2],[5,2],[3,2],[7,2]],
+    pad:    [0,5,8],
+  },
+  { // 3 — Ambient pad (slow, dreamy)
+    bpm: 50, rootHz: 65.4, scale: [0,3,5,7,10],
+    melody: [[0,2],[2,1],[1,1],[4,2],[3,2],[0,4]],
+    bass:   [[0,4],[4,4]],
+    pad:    [0,5,10],
+  },
+  { // 4 — Baroque (bright major feel)
+    bpm: 100, rootHz: 130.8, scale: [0,2,4,5,7,9,11],
+    melody: [[6,1],[4,1],[2,.5],[4,.5],[0,2],[5,1],[6,1],[4,2]],
+    bass:   [[0,2],[4,2],[5,2],[2,2]],
+    pad:    [0,4,7],
+  },
+  { // 5 — Dorian groove (mid-tempo)
+    bpm: 90, rootHz: 98, scale: [0,2,3,5,7,9,10],
+    melody: [[0,1],[3,.5],[5,.5],[4,1],[2,.5],[0,.5],[6,2]],
+    bass:   [[0,2],[3,2],[5,2],[7,2]],
+    pad:    [0,3,7],
+  },
+  { // 6 — Medieval (pentatonic, sparse)
+    bpm: 72, rootHz: 73.4, scale: [0,3,5,7,10],
+    melody: [[4,1],[3,1],[1,2],[2,1],[0,3]],
+    bass:   [[0,3],[2,3]],
+    pad:    [0,5],
+  },
+  { // 7 — Tension (chromatic, dissonant)
+    bpm: 108, rootHz: 92, scale: [0,1,3,5,6,8,10],
+    melody: [[0,.5],[1,.5],[3,1],[5,.5],[3,.5],[6,2],[1,.5],[0,1]],
+    bass:   [[0,2],[6,2],[5,2],[3,2]],
+    pad:    [0,6,10],
+  },
+  { // 8 — Lyrical (slow, expressive minor)
+    bpm: 58, rootHz: 87.3, scale: [0,2,3,5,7,8,11],
+    melody: [[2,2],[4,1],[5,1],[7,2],[5,1],[3,1],[2,4]],
+    bass:   [[0,4],[7,4]],
+    pad:    [0,3,8],
+  },
+];
+
+function getBgmCtx() {
+  if (!bgmCtx) bgmCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (bgmCtx.state === 'suspended') bgmCtx.resume();
+  return bgmCtx;
+}
+
+// Convert semitone offset from root to frequency
+function semitoneToHz(rootHz, semitones) {
+  return rootHz * Math.pow(2, semitones / 12);
+}
+
+// Play a single BGM note (non-SFX, softer)
+function bgmNote(ctx, masterGain, freq, startTime, duration, type = 'triangle', vol = 0.06) {
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type             = type;
+  osc.frequency.value  = freq;
+  gain.gain.setValueAtTime(0, startTime);
+  gain.gain.linearRampToValueAtTime(vol, startTime + 0.02);
+  gain.gain.setValueAtTime(vol, startTime + duration - 0.04);
+  gain.gain.linearRampToValueAtTime(0, startTime + duration);
+  osc.connect(gain);
+  gain.connect(masterGain);
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.05);
+  bgmNodes.push(osc);
+}
+
+// Schedule and loop a track
+function playTrack(trackIdx) {
+  if (!bgmEnabled) return;
+  const ctx   = getBgmCtx();
+  const track = BGM_TRACKS[trackIdx % BGM_TRACKS.length];
+  const beat  = 60 / track.bpm;
+
+  // Master gain for this track — very quiet, supportive not dominant
+  const master = ctx.createGain();
+  master.gain.setValueAtTime(0.28, ctx.currentTime);
+  master.connect(ctx.destination);
+  bgmNodes.push(master);
+
+  // ── Pad (sustained chords) ──
+  // One full repeat of the melody length
+  const totalMelodyBeats = track.melody.reduce((s, [, d]) => s + d, 0);
+  const padDuration       = totalMelodyBeats * beat;
+  track.pad.forEach(interval => {
+    const freq = semitoneToHz(track.rootHz, track.scale[interval] ?? interval);
+    bgmNote(ctx, master, freq, ctx.currentTime, padDuration, 'sine', 0.035);
+  });
+
+  // ── Bass line ──
+  let bassTime = ctx.currentTime;
+  for (const [noteIdx, dur] of track.bass) {
+    const semis = track.scale[noteIdx % track.scale.length];
+    const freq  = semitoneToHz(track.rootHz, semis);
+    bgmNote(ctx, master, freq, bassTime, dur * beat * 0.85, 'triangle', 0.055);
+    bassTime += dur * beat;
+  }
+
+  // ── Melody ──
+  let melTime = ctx.currentTime;
+  for (const [noteIdx, dur] of track.melody) {
+    const semis  = track.scale[noteIdx % track.scale.length];
+    const freq   = semitoneToHz(track.rootHz * 2, semis); // octave up
+    bgmNote(ctx, master, freq, melTime, dur * beat * 0.88, 'sine', 0.045);
+    melTime += dur * beat;
+  }
+
+  // Schedule next track after this one finishes
+  const trackDuration = Math.max(bassTime, melTime) - ctx.currentTime;
+  bgmTrackTimer = setTimeout(() => {
+    stopBgmNodes();
+    if (bgmEnabled) {
+      // Pick a different track at random
+      const next = (trackIdx + 1 + Math.floor(Math.random() * (BGM_TRACKS.length - 1))) % BGM_TRACKS.length;
+      bgmTrackIndex = next;
+      playTrack(next);
+    }
+  }, (trackDuration + 0.5) * 1000);
+}
+
+function stopBgmNodes() {
+  clearTimeout(bgmTrackTimer);
+  bgmTrackTimer = null;
+  bgmNodes.forEach(n => { try { n.stop?.(); n.disconnect?.(); } catch(e) {} });
+  bgmNodes = [];
+}
+
+function startBgm() {
+  stopBgmNodes();
+  bgmPlaying = true;
+  // Start with a random track
+  bgmTrackIndex = Math.floor(Math.random() * BGM_TRACKS.length);
+  playTrack(bgmTrackIndex);
+}
+
+function stopBgm() {
+  stopBgmNodes();
+  bgmPlaying = false;
+}
+
+function toggleBgm() {
+  bgmEnabled = !bgmEnabled;
+  localStorage.setItem('bgm', bgmEnabled ? 'on' : 'off');
+  const btn = document.getElementById('btn-music');
+  btn.classList.toggle('music-on', bgmEnabled);
+  btn.textContent = bgmEnabled ? '♪ Music' : '♩ Music';
+  if (bgmEnabled) startBgm();
+  else stopBgm();
+}
+
+// Kick off BGM on first user interaction (browser autoplay policy)
+function ensureBgmStarted() {
+  if (bgmEnabled && !bgmPlaying) startBgm();
+}
+
+// ── Apply initial music button state ──
+document.getElementById('btn-music').classList.toggle('music-on', bgmEnabled);
+document.getElementById('btn-music').textContent = bgmEnabled ? '♪ Music' : '♩ Music';
+
+
+// ═══════════════════════════════════════════
+//  15. INVITE LINK + URL AUTO-JOIN
+//
+//  When a room is created, build a shareable URL:
+//    https://yoursite.com/?join=ABCD
+//  Pasting/clicking this link auto-fills the join panel.
+//
+//  On page load, check window.location.search for ?join=CODE.
+//  If found, pre-fill the join input and open the join panel.
+// ═══════════════════════════════════════════
+
+function buildInviteUrl(code) {
+  const base = window.location.href.split('?')[0];
+  return `${base}?join=${code}`;
+}
+
+function updateInviteDisplay(code) {
+  const urlEl = document.getElementById('op-invite-url');
+  if (urlEl) urlEl.textContent = buildInviteUrl(code);
+}
+
+function checkUrlForJoinCode() {
+  const params = new URLSearchParams(window.location.search);
+  const code   = params.get('join');
+  if (!code || code.length !== 4) return;
+  // Pre-fill join panel and open it
+  const input = document.getElementById('op-code-input');
+  if (input) input.value = code.toUpperCase();
+  showOnlinePanel('joining');
+  setTimeout(() => {
+    document.getElementById('op-join-status').textContent = `Code ${code.toUpperCase()} ready — tap Connect`;
+    document.getElementById('op-join-status').className   = 'op-status ok';
+  }, 100);
+}
 
 let animTime = 0;
 
