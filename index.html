@@ -851,23 +851,39 @@ body::before {
 .btn-copy-link:hover { background: rgba(74,127,165,.1); border-color: var(--accent); }
 
 
+
 /* ── Cat button — tiny fixed bottom-right ── */
-#btn-cat {
+/* Wrapper provides the cooldown ring via conic-gradient pseudo-element */
+#btn-cat-wrap {
   position: fixed; bottom: var(--sp-4); right: var(--sp-4);
   z-index: 500;
-  width: 28px; height: 28px;
+  width: 36px; height: 36px;
   border-radius: 50%;
-  border: 1px solid rgba(255,180,200,.35);
-  background: rgba(9,9,14,.75);
-  font-size: .9rem; line-height: 1; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: transform 120ms ease, border-color 120ms ease;
-  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  /* Cooldown ring: conic-gradient sweeps --cat-pct from accent → transparent */
+  background: conic-gradient(
+    rgba(255,180,200,.7) calc(var(--cat-pct, 0) * 1%),
+    rgba(255,255,255,.08) calc(var(--cat-pct, 0) * 1%)
+  );
+  padding: 2px;
+  transition: transform 120ms ease;
 }
-#btn-cat:hover  { transform: scale(1.2); border-color: rgba(255,180,200,.7); }
-#btn-cat:active { transform: scale(.9); }
+#btn-cat-wrap:hover { transform: scale(1.15); }
 
-/* Cat sticker — JS physics drives position, only opacity/scale via CSS */
+#btn-cat {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  border: none;
+  background: rgba(12,10,18,.92);
+  font-size: 1rem; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 120ms ease;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  user-select: none;
+}
+#btn-cat:active       { transform: scale(.88); }
+#btn-cat.cooling      { cursor: not-allowed; opacity: .5; }
+
+/* Cat sticker — JS physics drives position */
 .cat-sticker {
   position: fixed;
   pointer-events: none;
@@ -876,19 +892,20 @@ body::before {
   will-change: transform, opacity;
   transform-origin: center center;
 }
-.cat-sticker img {
+.cat-sticker .cat-img-el {
   object-fit: cover;
-  border-radius: 12px;
-  border: 3px solid rgba(255,200,220,.8);
-  box-shadow: 0 8px 32px rgba(0,0,0,.65);
+  border-radius: 14px;
+  border: 3px solid rgba(255,200,220,.85);
+  box-shadow: 0 8px 36px rgba(0,0,0,.7);
   display: block;
+  background: rgba(40,20,35,.8); /* visible placeholder while loading */
 }
 .cat-sticker .meow-label {
   font-family: var(--font-mono);
-  font-size: .7rem; font-weight: 700;
+  font-size: .75rem; font-weight: 700;
   color: #ffb0cc;
   letter-spacing: .1em;
-  text-shadow: 0 2px 6px rgba(0,0,0,.9);
+  text-shadow: 0 2px 8px rgba(0,0,0,.95);
 }
 
 
@@ -961,7 +978,9 @@ body::before {
 <canvas id="c"></canvas>
 <div id="chkflash"></div>
 <!-- Cat button — tiny easter egg, bottom right -->
-<button id="btn-cat" title="🐱">🐱</button>
+<div id="btn-cat-wrap">
+  <button id="btn-cat" title="🐱">🐱</button>
+</div>
 
 <!-- ════════════════════════════════════════════
      LANDING
@@ -3900,87 +3919,162 @@ function checkUrlForJoinCode() {
 }
 
 // ═══════════════════════════════════════════
+
 // ═══════════════════════════════════════════
 //  16. CAT BUTTON — easter egg
 //
-//  Real cat meow audio from Wikimedia Commons (CC0 public domain).
-//  4 recordings preloaded as HTMLAudioElement — instant playback.
-//  playbackRate randomised ±20% for pitch variety per meow.
+//  Sound:  Web Audio formant synthesis — two band-pass filters shaped
+//          to mimic the F1/F2 formants of a real cat meow. Self-contained,
+//          zero network, works in all browsers including Safari.
 //
-//  Image pool: 12 cats preloaded from cataas.com on init.
-//  Physics: JS rAF loop, fires toward screen center with ±50° spread.
-//  3–5 large cats (130–260px) per click.
-//  2.5s cooldown — button dims and ignores clicks during cooldown.
+//  Images: Preloaded from cataas.com into a canvas, stored as blob URLs.
+//          Each cat sticker shows a styled placeholder immediately and
+//          swaps to the real photo when the blob is ready.
+//
+//  Polish: Conic-gradient cooldown ring on the wrapper drains over 2.5s.
+//          Ring animates via rAF updating a CSS custom property.
 // ═══════════════════════════════════════════
 
 const MEOW_LABELS = ['meow!', 'mrow~', 'purrr', 'mew!', 'nya~', 'mreow', '...meow'];
 
-// ── Real cat meow sounds ─────────────────────
-// Wikimedia Commons direct media URLs. CC0 / public domain.
-// Two distinct recordings; cloned on each play so sounds can overlap.
-const CAT_SOUND_URLS = [
-  'https://upload.wikimedia.org/wikipedia/commons/2/21/Meow.ogg',
-  'https://upload.wikimedia.org/wikipedia/commons/5/55/Meow_domestic_cat.ogg',
-];
-const catAudioPool = CAT_SOUND_URLS.map(url => {
-  const a = new Audio(url);
-  a.preload = 'auto';
-  a.volume  = 0.75;
-  return a;
-});
-
-function playCatSound() {
+// ── Formant-modelled cat meow ─────────────────
+// Real cat meows have two dominant formants (resonant peaks):
+//   F1 ≈ 750 Hz (mouth opening — the "ea" vowel shape)
+//   F2 ≈ 1800 Hz (tongue position — the "ow" transition)
+// We model this with a noise source → two BPFs → amplitude envelope
+// plus a pitch-glide sine for the "voiced" fundamental.
+function playCatMeow() {
   try {
-    const src   = catAudioPool[Math.floor(Math.random() * catAudioPool.length)];
-    const clone = src.cloneNode();
-    // Randomise pitch ±20% for variety — each meow sounds slightly different
-    clone.playbackRate = 0.82 + Math.random() * 0.4;
-    clone.volume       = 0.65 + Math.random() * 0.25;
-    clone.play().catch(() => {});
-    clone.addEventListener('ended', () => { clone.src = ''; }, { once: true });
+    const ctx  = new (window.AudioContext || window.webkitAudioContext)();
+    const dur  = 0.45 + Math.random() * 0.35;  // 450–800 ms
+    const now  = ctx.currentTime;
+    const root = 380 + Math.random() * 220;      // 380–600 Hz fundamental
+
+    // ── Voiced fundamental (sine, pitch glide) ──
+    const fund = ctx.createOscillator();
+    const fGain = ctx.createGain();
+    fund.type = 'sine';
+    // Meow pitch arc: rise to peak at 30%, settle at 70%, fall to end
+    fund.frequency.setValueAtTime(root * 0.75, now);
+    fund.frequency.linearRampToValueAtTime(root * 1.35, now + dur * 0.30);
+    fund.frequency.linearRampToValueAtTime(root * 1.10, now + dur * 0.70);
+    fund.frequency.linearRampToValueAtTime(root * 0.65, now + dur);
+    fGain.gain.setValueAtTime(0,    now);
+    fGain.gain.linearRampToValueAtTime(0.14, now + 0.018);
+    fGain.gain.setValueAtTime(0.14, now + dur * 0.65);
+    fGain.gain.exponentialRampToValueAtTime(0.0001, now + dur + 0.05);
+    fund.connect(fGain); fGain.connect(ctx.destination);
+    fund.start(now); fund.stop(now + dur + 0.06);
+
+    // ── Noise through formant filters (breathiness / texture) ──
+    const bufLen  = ctx.sampleRate * (dur + 0.1);
+    const buf     = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+    const data    = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+    const noise   = ctx.createBufferSource();
+    noise.buffer  = buf;
+
+    // F1 filter — mouth formant ~750 Hz
+    const f1 = ctx.createBiquadFilter();
+    f1.type = 'bandpass';
+    f1.frequency.value = 750;
+    f1.Q.value = 8;
+
+    // F2 filter — tongue formant ~1800 Hz
+    const f2 = ctx.createBiquadFilter();
+    f2.type = 'bandpass';
+    // F2 slides down as mouth closes (classic meow shape)
+    f2.frequency.setValueAtTime(2200, now);
+    f2.frequency.linearRampToValueAtTime(1400, now + dur);
+    f2.Q.value = 10;
+
+    const nGain = ctx.createGain();
+    nGain.gain.setValueAtTime(0,     now);
+    nGain.gain.linearRampToValueAtTime(0.055, now + 0.025);
+    nGain.gain.setValueAtTime(0.055, now + dur * 0.6);
+    nGain.gain.exponentialRampToValueAtTime(0.0001, now + dur + 0.04);
+
+    noise.connect(f1); noise.connect(f2);
+    f1.connect(nGain); f2.connect(nGain);
+    nGain.connect(ctx.destination);
+    noise.start(now); noise.stop(now + dur + 0.06);
+
+    setTimeout(() => ctx.close(), (dur + 0.3) * 1000);
   } catch(e) {}
 }
 
-// ── Image pool ───────────────────────────────
-const CAT_POOL_SIZE = 12;
-const CAT_IMG_SIZE  = 320;
-const catImagePool  = [];
+// ── Image pool — canvas-baked blob URLs ───────
+// Each pooled entry: { blobUrl: string|null, loading: bool }
+// On load, the image is drawn to a canvas and stored as a blob URL.
+// Spawning picks a ready blob URL; placeholder canvas shown otherwise.
+const CAT_POOL_SIZE  = 10;
+const CAT_FETCH_SIZE = 300;
+const catPool        = [];  // { blobUrl, ready }
 
 function preloadCatPool() {
   for (let i = 0; i < CAT_POOL_SIZE; i++) {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    setTimeout(() => {
-      img.src = `https://cataas.com/cat?width=${CAT_IMG_SIZE}&height=${CAT_IMG_SIZE}&v=${i}_${Date.now()}`;
-    }, i * 180);
-    catImagePool.push(img);
+    const entry = { blobUrl: null, ready: false };
+    catPool.push(entry);
+    // Stagger requests 250ms apart to avoid rate limiting
+    setTimeout(() => fetchCatIntoBlobUrl(entry, i), i * 250);
   }
 }
 
-function getPooledCatImg() {
-  const loaded = catImagePool.filter(img => img.complete && img.naturalWidth > 0);
-  return loaded.length ? loaded[Math.floor(Math.random() * loaded.length)] : null;
+function fetchCatIntoBlobUrl(entry, idx) {
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = CAT_FETCH_SIZE;
+      canvas.getContext('2d').drawImage(img, 0, 0, CAT_FETCH_SIZE, CAT_FETCH_SIZE);
+      canvas.toBlob(blob => {
+        if (blob) { entry.blobUrl = URL.createObjectURL(blob); entry.ready = true; }
+      }, 'image/jpeg', 0.88);
+    } catch(e) {
+      // CORS draw failure — store src directly as fallback
+      entry.blobUrl = img.src; entry.ready = true;
+    }
+  };
+  img.onerror = () => {
+    // Retry once with a fresh URL after 2s
+    setTimeout(() => fetchCatIntoBlobUrl(entry, idx), 2000);
+  };
+  img.src = `https://cataas.com/cat?width=${CAT_FETCH_SIZE}&height=${CAT_FETCH_SIZE}&t=${idx}_${Date.now()}`;
 }
 
-// ── Cooldown ─────────────────────────────────
-const CAT_COOLDOWN_MS  = 2500;
-let   catCooldownEnd   = 0;
-let   catCooldownTimer = null;
+function getReadyCatBlobUrl() {
+  const ready = catPool.filter(e => e.ready && e.blobUrl);
+  return ready.length ? ready[Math.floor(Math.random() * ready.length)].blobUrl : null;
+}
+
+// ── Cooldown ring ─────────────────────────────
+const CAT_COOLDOWN_MS = 2500;
+let   catCooldownEnd  = 0;
+let   catRingRaf      = null;
 
 function startCatCooldown() {
-  const btn         = document.getElementById('btn-cat');
-  catCooldownEnd    = Date.now() + CAT_COOLDOWN_MS;
-  btn.disabled      = true;
-  btn.style.opacity = '0.35';
-  btn.style.cursor  = 'not-allowed';
-  btn.style.outline = '2px solid rgba(255,180,200,.5)';
-  clearTimeout(catCooldownTimer);
-  catCooldownTimer  = setTimeout(() => {
-    btn.disabled      = false;
-    btn.style.opacity = '1';
-    btn.style.cursor  = '';
-    btn.style.outline = '';
-  }, CAT_COOLDOWN_MS);
+  const wrap    = document.getElementById('btn-cat-wrap');
+  const btn     = document.getElementById('btn-cat');
+  catCooldownEnd = Date.now() + CAT_COOLDOWN_MS;
+  btn.classList.add('cooling');
+
+  // Animate --cat-pct from 100 → 0 over cooldown duration
+  cancelAnimationFrame(catRingRaf);
+  function animRing() {
+    const remaining = catCooldownEnd - Date.now();
+    if (remaining <= 0) {
+      wrap.style.setProperty('--cat-pct', '0');
+      btn.classList.remove('cooling');
+      catRingRaf = null;
+      return;
+    }
+    const pct = (remaining / CAT_COOLDOWN_MS) * 100;
+    wrap.style.setProperty('--cat-pct', pct.toFixed(1));
+    catRingRaf = requestAnimationFrame(animRing);
+  }
+  wrap.style.setProperty('--cat-pct', '100');
+  catRingRaf = requestAnimationFrame(animRing);
 }
 
 // ── Physics ──────────────────────────────────
@@ -3989,25 +4083,47 @@ let catRafId    = null;
 let lastCatTime = null;
 const CAT_GRAVITY = 520;
 
-function createCatPhysics(bx, by, img) {
-  const size   = 130 + Math.floor(Math.random() * 130); // 130–260px
+function createCatPhysics(bx, by) {
+  const size   = 130 + Math.floor(Math.random() * 130);
   const cx     = innerWidth  / 2;
   const cy     = innerHeight / 2;
   const base   = Math.atan2(cy - by, cx - bx);
-  const spread = (Math.random() - 0.5) * (Math.PI * 0.55); // ±~50°
+  const spread = (Math.random() - 0.5) * (Math.PI * 0.55);
   const speed  = 1100 + Math.random() * 700;
   const vx     = Math.cos(base + spread) * speed;
   const vy     = Math.sin(base + spread) * speed;
 
-  const el = document.createElement('div');
+  const el     = document.createElement('div');
   el.className = 'cat-sticker';
 
-  const imgEl = document.createElement('img');
-  imgEl.src   = img ? img.src
-    : `https://cataas.com/cat?width=${size}&height=${size}&v=${Math.random()}`;
+  // ── Image element — starts with placeholder, swaps to real cat ──
+  const imgEl  = document.createElement('img');
+  imgEl.className = 'cat-img-el';
+  imgEl.width  = size;
+  imgEl.height = size;
   imgEl.style.width  = size + 'px';
   imgEl.style.height = size + 'px';
-  imgEl.alt   = '\uD83D\uDC31';
+  imgEl.alt    = '🐱';
+
+  const blobUrl = getReadyCatBlobUrl();
+  if (blobUrl) {
+    imgEl.src = blobUrl;
+  } else {
+    // Placeholder: inline SVG cat face shown instantly
+    imgEl.src = `data:image/svg+xml,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 100 100">`+
+      `<rect width="100" height="100" rx="14" fill="%23281828"/>` +
+      `<text x="50" y="68" font-size="52" text-anchor="middle">🐱</text></svg>`
+    )}`;
+    // Swap to real image when one becomes ready (poll every 200ms, max 3s)
+    let attempts = 0;
+    const trySwap = setInterval(() => {
+      attempts++;
+      const url = getReadyCatBlobUrl();
+      if (url) { imgEl.src = url; clearInterval(trySwap); }
+      else if (attempts > 15) clearInterval(trySwap);
+    }, 200);
+  }
 
   const label = document.createElement('div');
   label.className   = 'meow-label';
@@ -4025,7 +4141,7 @@ function createCatPhysics(bx, by, img) {
     vx, vy,
     rot: (Math.random() - 0.5) * 540,
     rotVal: 0,
-    life: 0, maxLife: 1.8 + Math.random() * 0.7,
+    life: 0, maxLife: 1.9 + Math.random() * 0.7,
   };
 }
 
@@ -4066,29 +4182,27 @@ function explodeCats() {
   const bx   = rect.left + rect.width  / 2;
   const by   = rect.top  + rect.height / 2;
 
-  // 1–2 real meow sounds
-  playCatSound();
-  if (Math.random() > 0.45) setTimeout(playCatSound, 90 + Math.random() * 150);
+  // 1–2 meows with slight stagger
+  playCatMeow();
+  if (Math.random() > 0.45) setTimeout(playCatMeow, 80 + Math.random() * 160);
 
   const count = 3 + Math.floor(Math.random() * 3);
   for (let i = 0; i < count; i++) {
-    activeCats.push(createCatPhysics(bx, by, getPooledCatImg()));
+    activeCats.push(createCatPhysics(bx, by));
   }
   if (!catRafId) { lastCatTime = null; catRafId = requestAnimationFrame(tickCats); }
 
-  btn.style.animation = 'none';
-  void btn.offsetWidth;
-  btn.style.animation = 'shakeCss 280ms ease';
-  setTimeout(() => { btn.style.animation = ''; }, 300);
+  // Button bounce
+  btn.style.transform = 'scale(.82)';
+  setTimeout(() => { btn.style.transform = ''; }, 120);
+
   startCatCooldown();
 }
 
 document.getElementById('btn-cat').addEventListener('click', explodeCats);
 
-// Preload everything immediately
+// Preload image pool immediately on script load
 preloadCatPool();
-catAudioPool.forEach(a => a.load());
-
 
 let animTime = 0;
 
