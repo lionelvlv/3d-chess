@@ -3819,77 +3819,327 @@ checkUrlForJoinCode();
 
 
 // ═══════════════════════════════════════════
-//  14. BACKGROUND MUSIC — 8 procedural tracks
+//  14. BACKGROUND MUSIC — 8 tracks, proper music theory
 //
-//  All music is synthesised via Web Audio API.
-//  No external files. Works offline and on GitHub Pages.
+//  Inspired by Undertale / Deltarune / Mario / Balatro.
+//  All synthesis via Web Audio API — no files, no CDN.
 //
-//  Each track is a looping phrase: melody + bass + pad.
-//  Tracks shuffle randomly. Music persists across screens.
-//  Toggle via the ♪ Music button (state saved to localStorage).
+//  Architecture per track:
+//    - Ostinato bass establishes first (Toby Fox approach)
+//    - Melody enters after 1 bar intro, 8-bar parallel period
+//      (question phrase bars 1–4, answer phrase bars 5–8)
+//    - Each melodic unit repeated twice before advancing
+//    - Chord pad sustains underneath
+//
+//  Note representation: absolute Hz using equal temperament A4=440.
+//  Each track defines: bpm, bars, chordProg[], bassLine[], melody[].
+//  Notes are [hz, beatDuration] pairs. Duration in quarter-note beats.
 // ═══════════════════════════════════════════
 
-let bgmCtx          = null;
-let bgmNodes        = [];     // active oscillators/gains for current track
-let bgmPlaying      = false;
-let bgmEnabled      = localStorage.getItem('bgm') !== 'off'; // default on
-let bgmTrackIndex   = 0;
-let bgmTrackTimer   = null;
+let bgmCtx        = null;
+let bgmNodes      = [];
+let bgmPlaying    = false;
+let bgmEnabled    = localStorage.getItem('bgm') !== 'off';
+let bgmTrackIndex = 0;
+let bgmTrackTimer = null;
 
-// ── 8 track definitions ─────────────────────
-// Each track: { bpm, rootHz, scale[], melodySteps[], bassSteps[], padIntervals[] }
-// scale = semitone offsets from root; melodySteps/bassSteps = [noteIdx, durationBeats]
-// padIntervals = chord intervals played as sustained background
+// ── Equal temperament note table ────────────
+// C4 = 261.63 Hz as anchor.
+const N = (() => {
+  const A4 = 440;
+  // Returns Hz for note name + octave, e.g. N('C',4), N('F#',3)
+  const NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  return (name, oct) => {
+    const idx = NAMES.indexOf(name.replace('b', '#')
+      .replace('Db','C#').replace('Eb','D#').replace('Gb','F#')
+      .replace('Ab','G#').replace('Bb','A#'));
+    const semis = (oct - 4) * 12 + (idx - 9); // offset from A4
+    return A4 * Math.pow(2, semis / 12);
+  };
+})();
+
+// ── 8 Track Definitions ──────────────────────
+// Each track:
+//   bpm        — quarter note BPM
+//   swing      — 0–0.5, amount of swing (0 = straight, 0.5 = full triplet swing)
+//   intro      — bars of bass-only before melody enters (Undertale intro paradigm)
+//   bass[]     — [hz, beats] sequence, loops for full track duration
+//   chords[]   — [[hz,hz,hz], beats] sustained pad chords, one per bar
+//   melody[]   — [hz, beats] 8-bar phrase (question 4 + answer 4), played TWICE
+//   lead       — oscillator type for melody ('square'=chiptune, 'sine'=smooth)
+//   bassType   — oscillator type for bass ('triangle'=warm NES bass)
 
 const BGM_TRACKS = [
-  { // 1 — Dark waltz (minor, slow)
-    bpm: 66, rootHz: 110, scale: [0,2,3,5,7,8,10],
-    melody: [[0,1],[2,1],[4,.5],[3,.5],[2,2],[5,1],[4,1],[3,2]],
-    bass:   [[0,2],[4,2],[3,2],[5,2]],
-    pad:    [0,7,10],
+
+  // ── Track 1: "Once Upon a Time" (Undertale-style)
+  // A minor, 120 BPM. i–VI–III–VII progression (classic Toby Fox).
+  // Ostinato eighth-note bass, parallel period melody, square lead.
+  // Question phrase rises (tonic→dominant), answer resolves (dominant→tonic).
+  {
+    name: 'Once Upon a Time',
+    bpm: 120, swing: 0, intro: 1,
+    bassType: 'triangle', lead: 'square',
+    // Ostinato: Am–F–C–G bass roots, one note per beat
+    bass: [
+      [N('A',2),1],[N('A',2),.5],[N('C',3),.5],
+      [N('F',2),1],[N('F',2),.5],[N('A',2),.5],
+      [N('C',3),1],[N('C',3),.5],[N('E',3),.5],
+      [N('G',2),1],[N('G',2),.5],[N('B',2),.5],
+    ],
+    // Pad chords: Am, F, C, G (i–VI–III–VII in A minor)
+    chords: [
+      [[N('A',3),N('C',4),N('E',4)], 4],
+      [[N('F',3),N('A',3),N('C',4)], 4],
+      [[N('C',3),N('E',3),N('G',3)], 4],
+      [[N('G',3),N('B',3),N('D',4)], 4],
+    ],
+    // 8-bar melody: question (A–C–E climb, peak at E5) → answer (resolves to A4)
+    // Each phrase is 4 beats. Played twice = 16 bars total.
+    melody: [
+      // Question phrase: rises, ends on E (5th, tension)
+      [N('A',4),.5],[N('C',5),.5],[N('E',5),1],[N('E',5),.5],[N('D',5),.5],
+      [N('C',5),1],[N('A',4),1],[N('B',4),1],[N('E',5),1],
+      [N('D',5),.5],[N('C',5),.5],[N('B',4),1],[N('G',4),.5],[N('A',4),.5],[N('B',4),1],
+      [N('C',5),1.5],[N('B',4),.5],[N('A',4),2],
+      // Answer phrase: mirrors question opening but resolves down to A4 (tonic)
+      [N('A',4),.5],[N('C',5),.5],[N('E',5),1],[N('E',5),.5],[N('D',5),.5],
+      [N('C',5),1],[N('D',5),1],[N('E',5),1],[N('D',5),.5],[N('C',5),.5],
+      [N('B',4),.5],[N('A',4),.5],[N('G',4),1],[N('F',4),.5],[N('E',4),.5],[N('G',4),1],
+      [N('A',4),4],
+    ],
   },
-  { // 2 — Tense minor (fast arpeggio)
-    bpm: 120, rootHz: 82.4, scale: [0,2,3,5,7,8,11],
-    melody: [[0,.5],[2,.5],[4,.5],[7,.5],[4,.5],[2,.5],[0,1],[5,.5],[3,.5]],
-    bass:   [[0,2],[5,2],[3,2],[7,2]],
-    pad:    [0,5,8],
+
+  // ── Track 2: "Ruins" (Undertale ambient, A natural minor)
+  // 80 BPM, slow and melancholy. i–iv–v–i. Sine lead for warmth.
+  // Toby Fox-style: simple repeated motif, contemplative.
+  {
+    name: 'Ruins',
+    bpm: 80, swing: 0, intro: 2,
+    bassType: 'triangle', lead: 'sine',
+    bass: [
+      [N('A',2),2],[N('D',3),2],
+      [N('E',3),2],[N('A',2),2],
+    ],
+    chords: [
+      [[N('A',3),N('C',4),N('E',4)], 4],  // i
+      [[N('D',3),N('F',3),N('A',3)], 4],  // iv
+      [[N('E',3),N('G',3),N('B',3)], 4],  // v (minor v for natural minor feel)
+      [[N('A',3),N('C',4),N('E',4)], 4],  // i
+    ],
+    melody: [
+      // Question: starts on 5th, gentle descent with a hitch
+      [N('E',5),2],[N('D',5),1],[N('C',5),1],
+      [N('B',4),1.5],[N('A',4),.5],[N('B',4),1],[N('C',5),1],
+      [N('A',4),2],[N('G',4),2],
+      [N('F',4),1],[N('E',4),1],[N('F',4),1],[N('A',4),1],
+      // Answer: same opening, but resolves conclusively to A4
+      [N('E',5),2],[N('D',5),1],[N('C',5),1],
+      [N('B',4),1],[N('A',4),1],[N('G',4),2],
+      [N('F',4),1],[N('E',4),1],[N('D',4),1.5],[N('E',4),.5],
+      [N('A',4),4],
+    ],
   },
-  { // 3 — Ambient pad (slow, dreamy)
-    bpm: 50, rootHz: 65.4, scale: [0,3,5,7,10],
-    melody: [[0,2],[2,1],[1,1],[4,2],[3,2],[0,4]],
-    bass:   [[0,4],[4,4]],
-    pad:    [0,5,10],
+
+  // ── Track 3: "Overworld" (Mario-style, C major)
+  // 100 BPM, swing 0.15 (ragtime feel). I–IV–V–IV progression.
+  // Square wave lead (NES-authentic). Syncopated melody on chord tones.
+  // Modal cadence ♭VI–♭VII–I in bars 7–8 (the "Mario cadence").
+  {
+    name: 'Overworld',
+    bpm: 100, swing: 0.15, intro: 0,
+    bassType: 'triangle', lead: 'square',
+    bass: [
+      [N('C',3),1],[N('G',2),1],[N('C',3),1],[N('G',2),1],   // I
+      [N('F',2),1],[N('C',3),1],[N('F',2),1],[N('C',3),1],   // IV
+      [N('G',2),1],[N('D',3),1],[N('G',2),1],[N('D',3),1],   // V
+      [N('F',2),1],[N('C',3),1],[N('F',2),1],[N('C',3),1],   // IV
+    ],
+    chords: [
+      [[N('C',3),N('E',3),N('G',3)], 4],   // I
+      [[N('F',3),N('A',3),N('C',4)], 4],   // IV
+      [[N('G',3),N('B',3),N('D',4)], 4],   // V
+      [[N('F',3),N('A',3),N('C',4)], 4],   // IV → ♭VI–♭VII–I in melody
+    ],
+    melody: [
+      // Question: arpeggiated C major chord, swing feel, syncopated
+      [N('E',5),.5],[N('E',5),.5],[N('E',5),1],
+      [N('C',5),.5],[N('E',5),.5],[N('G',5),1],[N('G',4),.5],[0,0.5],
+      [N('A',4),1],[N('B',4),.5],[N('A',4),.5],[N('G',4),.33],[N('B',5),.33],[N('E',5),.34],
+      [N('D',5),.5],[N('C',5),.5],[0,2],[N('G',4),.5],[N('F',4),.5],
+      // Answer: descends, ends with ♭VI–♭VII–I (Ab–Bb–C) modal cadence
+      [N('E',5),.5],[N('E',5),.5],[N('E',5),1],
+      [N('C',5),.5],[N('E',5),.5],[N('G',5),1],[N('G',5),.5],[0,.5],
+      [N('Ab',5),.5],[N('Ab',5),.5],[N('Bb',5),.5],[N('Bb',5),.5], // ♭VI–♭VII
+      [N('C',5),2],[N('G',4),.5],[N('C',5),.5],[0,1],              // → I resolve
+    ],
   },
-  { // 4 — Baroque (bright major feel)
-    bpm: 100, rootHz: 130.8, scale: [0,2,4,5,7,9,11],
-    melody: [[6,1],[4,1],[2,.5],[4,.5],[0,2],[5,1],[6,1],[4,2]],
-    bass:   [[0,2],[4,2],[5,2],[2,2]],
-    pad:    [0,4,7],
+
+  // ── Track 4: "Snowdin Town" (Undertale, C major/minor mix)
+  // 130 BPM, cheerful but slightly wistful. I–V–vi–IV (pop/Toby Fox).
+  // Square lead. Short repeated motif, energetic.
+  {
+    name: 'Snowdin Town',
+    bpm: 130, swing: 0, intro: 1,
+    bassType: 'triangle', lead: 'square',
+    bass: [
+      [N('C',3),1],[N('E',3),.5],[N('G',3),.5],
+      [N('G',2),1],[N('B',2),.5],[N('D',3),.5],
+      [N('A',2),1],[N('C',3),.5],[N('E',3),.5],
+      [N('F',2),1],[N('A',2),.5],[N('C',3),.5],
+    ],
+    chords: [
+      [[N('C',3),N('E',3),N('G',3)], 4],   // I
+      [[N('G',3),N('B',3),N('D',4)], 4],   // V
+      [[N('A',3),N('C',4),N('E',4)], 4],   // vi
+      [[N('F',3),N('A',3),N('C',4)], 4],   // IV
+    ],
+    melody: [
+      // Question: bright, stepwise rise, ends on D5 (tension over I chord)
+      [N('C',5),.5],[N('D',5),.5],[N('E',5),1],[N('G',5),1],[N('E',5),.5],[N('D',5),.5],
+      [N('D',5),.5],[N('B',4),.5],[N('G',4),1],[N('A',4),.5],[N('B',4),.5],[N('C',5),1],
+      [N('E',5),.5],[N('D',5),.5],[N('C',5),.5],[N('B',4),.5],[N('A',4),1],[N('G',4),1],
+      [N('A',4),.5],[N('C',5),.5],[N('B',4),.5],[N('A',4),.5],[N('G',4),2],
+      // Answer: same opening, resolves triumphantly to C5
+      [N('C',5),.5],[N('D',5),.5],[N('E',5),1],[N('G',5),1],[N('E',5),.5],[N('D',5),.5],
+      [N('D',5),.5],[N('E',5),.5],[N('F',5),1],[N('E',5),.5],[N('D',5),.5],[N('C',5),1],
+      [N('G',4),.5],[N('A',4),.5],[N('B',4),.5],[N('C',5),.5],[N('D',5),1],[N('E',5),1],
+      [N('C',5),4],
+    ],
   },
-  { // 5 — Dorian groove (mid-tempo)
-    bpm: 90, rootHz: 98, scale: [0,2,3,5,7,9,10],
-    melody: [[0,1],[3,.5],[5,.5],[4,1],[2,.5],[0,.5],[6,2]],
-    bass:   [[0,2],[3,2],[5,2],[7,2]],
-    pad:    [0,3,7],
+
+  // ── Track 5: "Joker's Theme" (Balatro-style, 7/4 meter, E minor)
+  // 90 BPM in 7/4. Jazz-influenced, hypnotic, slightly unsettling.
+  // i–VI–III–VII but phrased in 7 (4+3 grouping). Sine pad, triangle bass.
+  // The irregular meter is the defining Balatro characteristic.
+  {
+    name: "Joker's Theme",
+    bpm: 90, swing: 0.08, intro: 1,
+    bassType: 'triangle', lead: 'sine',
+    // 7-beat bar bass pattern (4+3 feel like Balatro)
+    bass: [
+      [N('E',2),1],[N('E',2),.5],[N('B',2),.5],[N('E',2),1],[N('G',2),.5],[N('A',2),.5],// 4 beats
+      [N('C',3),.5],[N('B',2),.5],[N('E',2),.5],[N('Eb',3),.5],[N('E',2),.5],[N('D',3),.5],// 3 beats ×2 bars
+    ],
+    chords: [
+      [[N('E',3),N('G',3),N('B',3)], 7],   // i (7 beats)
+      [[N('C',3),N('E',3),N('G',3)], 7],   // VI
+      [[N('G',2),N('B',2),N('D',3)], 7],   // III
+      [[N('D',3),N('F#',3),N('A',3)], 7],  // VII
+    ],
+    melody: [
+      // Question in 7/4: 4+3 grouping, jazzy chromatic approach notes
+      [N('E',5),1],[N('F#',5),.5],[N('G',5),.5],[N('A',5),1],[N('B',5),.5],[N('A',5),.5], // 4 beats
+      [N('G',5),.5],[N('F#',5),.5],[N('E',5),1.5],                                          // 3 beats (= 7)
+      [N('D',5),1],[N('C',5),.5],[N('B',4),.5],[N('C',5),1],[N('D',5),.5],[N('E',5),.5],
+      [N('F#',5),.5],[N('E',5),.5],[N('D',5),1.5],
+      // Answer resolves to E5 with chromatic lower neighbour Eb
+      [N('G',5),1],[N('A',5),.5],[N('B',5),.5],[N('C',6),1],[N('B',5),.5],[N('A',5),.5],
+      [N('G',5),.5],[N('F#',5),.5],[N('E',5),1.5],
+      [N('Eb',5),.5],[N('E',5),.5],[N('F#',5),1],[N('G',5),.5],[N('A',5),.5],[N('B',5),.5],[N('A',5),.5],
+      [N('E',5),3.5],
+    ],
   },
-  { // 6 — Medieval (pentatonic, sparse)
-    bpm: 72, rootHz: 73.4, scale: [0,3,5,7,10],
-    melody: [[4,1],[3,1],[1,2],[2,1],[0,3]],
-    bass:   [[0,3],[2,3]],
-    pad:    [0,5],
+
+  // ── Track 6: "Field of Hopes" (Deltarune-style, D major)
+  // 140 BPM, bright, driving, SNES-esque layering. I–V–vi–IV then I–IV–V–I.
+  // Square wave lead, energetic 8th-note bass, the "Field of Hopes and Dreams" vibe.
+  {
+    name: 'Field of Hopes',
+    bpm: 140, swing: 0, intro: 1,
+    bassType: 'triangle', lead: 'square',
+    bass: [
+      [N('D',3),.5],[N('D',3),.5],[N('A',3),.5],[N('A',3),.5],   // I
+      [N('A',2),.5],[N('A',2),.5],[N('E',3),.5],[N('E',3),.5],   // V
+      [N('B',2),.5],[N('B',2),.5],[N('F#',3),.5],[N('F#',3),.5], // vi
+      [N('G',2),.5],[N('G',2),.5],[N('D',3),.5],[N('D',3),.5],   // IV
+    ],
+    chords: [
+      [[N('D',3),N('F#',3),N('A',3)], 4],   // I
+      [[N('A',3),N('C#',4),N('E',4)], 4],   // V
+      [[N('B',3),N('D',4),N('F#',4)], 4],   // vi
+      [[N('G',3),N('B',3),N('D',4)], 4],    // IV
+    ],
+    melody: [
+      // Question: bold upward leap, energetic Deltarune feel
+      [N('D',5),.5],[N('F#',5),.5],[N('A',5),1],[N('A',5),.5],[N('B',5),.5],
+      [N('A',5),.5],[N('G',5),.5],[N('F#',5),1],[N('E',5),.5],[N('D',5),.5],
+      [N('B',5),.5],[N('A',5),.5],[N('G',5),.5],[N('F#',5),.5],[N('E',5),1],[N('D',5),1],
+      [N('E',5),.5],[N('F#',5),.5],[N('G',5),1],[N('A',5),2],
+      // Answer: higher energy, extra step climb, resolves with a drop
+      [N('D',5),.5],[N('F#',5),.5],[N('A',5),1],[N('B',5),.5],[N('C#',6),.5],
+      [N('D',6),.5],[N('C#',6),.5],[N('B',5),.5],[N('A',5),.5],[N('G',5),1],
+      [N('F#',5),.5],[N('E',5),.5],[N('F#',5),.5],[N('G',5),.5],[N('A',5),1],[N('B',5),.5],[N('A',5),.5],
+      [N('D',5),4],
+    ],
   },
-  { // 7 — Tension (chromatic, dissonant)
-    bpm: 108, rootHz: 92, scale: [0,1,3,5,6,8,10],
-    melody: [[0,.5],[1,.5],[3,1],[5,.5],[3,.5],[6,2],[1,.5],[0,1]],
-    bass:   [[0,2],[6,2],[5,2],[3,2]],
-    pad:    [0,6,10],
+
+  // ── Track 7: "Underground" (Mario cave/underworld-style, C minor)
+  // 95 BPM, foreboding, chromatic bass descent (lamento bass).
+  // i–♭VII–♭VI–V: the classic minor sequence Kondo used for castles.
+  // The lamento bass (descending C–B–Bb–A–Ab–G) is the defining texture.
+  {
+    name: 'Underground',
+    bpm: 95, swing: 0, intro: 1,
+    bassType: 'triangle', lead: 'square',
+    // Chromatic lamento bass descent: C→B→Bb→A→Ab→G→... (iconic castle feel)
+    bass: [
+      [N('C',3),1],[N('B',2),1],[N('Bb',2),1],[N('A',2),1],
+      [N('Ab',2),1],[N('G',2),1],[N('F',2),1],[N('G',2),1],
+    ],
+    chords: [
+      [[N('C',3),N('Eb',3),N('G',3)], 4],    // i
+      [[N('Bb',2),N('D',3),N('F',3)], 4],    // ♭VII
+      [[N('Ab',2),N('C',3),N('Eb',3)], 4],   // ♭VI
+      [[N('G',2),N('B',2),N('D',3)], 4],     // V (major — tension resolution)
+    ],
+    melody: [
+      // Question: chromatic approach, nervous energy, ends unresolved on G
+      [N('G',5),.5],[N('Ab',5),.5],[N('G',5),1],[N('Eb',5),.5],[N('F',5),.5],
+      [N('G',5),1],[N('F',5),.5],[N('Eb',5),.5],[N('D',5),1],[N('Eb',5),1],
+      [N('F',5),.5],[N('Eb',5),.5],[N('D',5),.5],[N('C',5),.5],[N('Bb',4),1],[N('Ab',4),1],
+      [N('G',4),.5],[N('Ab',4),.5],[N('Bb',4),1],[N('G',4),2],
+      // Answer: same tension, resolves downward to C (tonic at last)
+      [N('G',5),.5],[N('Ab',5),.5],[N('G',5),1],[N('Eb',5),.5],[N('F',5),.5],
+      [N('G',5),1],[N('Ab',5),1],[N('Bb',5),.5],[N('Ab',5),.5],[N('G',5),1],
+      [N('F',5),.5],[N('Eb',5),.5],[N('D',5),1],[N('C',5),.5],[N('Bb',4),.5],[N('Ab',4),1],
+      [N('G',4),.5],[N('F',4),.5],[N('Eb',4),.5],[N('D',4),.5],[N('C',4),2],
+    ],
   },
-  { // 8 — Lyrical (slow, expressive minor)
-    bpm: 58, rootHz: 87.3, scale: [0,2,3,5,7,8,11],
-    melody: [[2,2],[4,1],[5,1],[7,2],[5,1],[3,1],[2,4]],
-    bass:   [[0,4],[7,4]],
-    pad:    [0,3,8],
+
+  // ── Track 8: "Battle Theme" (Undertale boss-inspired, A minor)
+  // 160 BPM, intense, driving. i–iv–♭VI–♭VII ostinato (Megalovania-style).
+  // Fast repeated ostinato bass, square wave, punchy short notes.
+  {
+    name: 'Battle Theme',
+    bpm: 160, swing: 0, intro: 1,
+    bassType: 'triangle', lead: 'square',
+    // Megalovania-style: rapid ostinato on i–iv–♭VI–♭VII
+    bass: [
+      [N('A',2),.5],[N('A',2),.5],[N('A',3),.5],[N('G',3),.5],
+      [N('F',2),.5],[N('F',2),.5],[N('F',3),.5],[N('E',3),.5],
+      [N('F',2),.5],[N('F',2),.5],[N('F',3),.5],[N('E',3),.5],
+      [N('G',2),.5],[N('G',2),.5],[N('G',3),.5],[N('F',3),.5],
+    ],
+    chords: [
+      [[N('A',3),N('C',4),N('E',4)], 4],   // i
+      [[N('D',3),N('F',3),N('A',3)], 4],   // iv
+      [[N('F',3),N('A',3),N('C',4)], 4],   // ♭VI
+      [[N('G',3),N('B',3),N('D',4)], 4],   // ♭VII
+    ],
+    melody: [
+      // Question: aggressive, lots of repeated notes then a burst upward
+      [N('A',4),.25],[N('A',4),.25],[N('A',5),.5],[N('G',5),.5],[N('F',5),.5],
+      [N('E',5),.5],[N('F',5),.5],[N('G',5),.5],[N('E',5),1],
+      [N('D',5),.25],[N('D',5),.25],[N('D',5),.5],[N('C',5),.5],[N('D',5),.5],
+      [N('E',5),.5],[N('C',5),.5],[N('A',4),1.5],
+      // Answer: ramps up higher, classic Undertale "hero theme" feel
+      [N('A',4),.25],[N('A',4),.25],[N('A',5),.5],[N('G',5),.5],[N('F',5),.5],
+      [N('G',5),.5],[N('A',5),.5],[N('Bb',5),.5],[N('A',5),.5],[N('G',5),.5],
+      [N('F',5),.5],[N('E',5),.5],[N('D',5),.5],[N('E',5),.5],[N('F',5),.5],[N('G',5),.5],
+      [N('A',5),4],
+    ],
   },
+
 ];
 
 function getBgmCtx() {
@@ -3898,79 +4148,104 @@ function getBgmCtx() {
   return bgmCtx;
 }
 
-// Convert semitone offset from root to frequency
-function semitoneToHz(rootHz, semitones) {
-  return rootHz * Math.pow(2, semitones / 12);
-}
-
-// Play a single BGM note (non-SFX, softer)
-function bgmNote(ctx, masterGain, freq, startTime, duration, type = 'triangle', vol = 0.06) {
+// Schedule a single BGM note with clean envelope
+function bgmNote(ctx, dest, hz, start, dur, type = 'triangle', vol = 0.05) {
+  if (!hz || hz <= 0) return; // skip rests (hz=0)
   const osc  = ctx.createOscillator();
   const gain = ctx.createGain();
-  osc.type             = type;
-  osc.frequency.value  = freq;
-  gain.gain.setValueAtTime(0, startTime);
-  gain.gain.linearRampToValueAtTime(vol, startTime + 0.02);
-  gain.gain.setValueAtTime(vol, startTime + duration - 0.04);
-  gain.gain.linearRampToValueAtTime(0, startTime + duration);
+  osc.type            = type;
+  osc.frequency.value = hz;
+  const att = Math.min(0.015, dur * 0.1);
+  const rel = Math.min(0.06, dur * 0.25);
+  gain.gain.setValueAtTime(0, start);
+  gain.gain.linearRampToValueAtTime(vol, start + att);
+  gain.gain.setValueAtTime(vol, start + dur - rel);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
   osc.connect(gain);
-  gain.connect(masterGain);
-  osc.start(startTime);
-  osc.stop(startTime + duration + 0.05);
+  gain.connect(dest);
+  osc.start(start);
+  osc.stop(start + dur + 0.01);
   bgmNodes.push(osc);
 }
 
-// Schedule and loop a track
+// Schedule and play one full track loop
 function playTrack(trackIdx) {
   if (!bgmEnabled) return;
   const ctx   = getBgmCtx();
   const track = BGM_TRACKS[trackIdx % BGM_TRACKS.length];
   const beat  = 60 / track.bpm;
+  const swing = track.swing || 0;
 
-  // Master gain for this track — very quiet, supportive not dominant
-  const master = ctx.createGain();
-  master.gain.setValueAtTime(0.28, ctx.currentTime);
-  master.connect(ctx.destination);
+  // Swing helper: even 8th notes get pushed, odd 8th notes shortened
+  let swingCounter = 0;
+  const swungDur = (dur) => {
+    // Only applies swing to 0.5-beat notes
+    if (dur !== 0.5) { swingCounter = 0; return dur * beat; }
+    const s = swingCounter % 2 === 0 ? dur * (1 + swing) : dur * (1 - swing);
+    swingCounter++;
+    return s * beat;
+  };
+
+  // ── Master gain chain ──
+  // Low-pass filter takes the edge off bright square waves
+  const master  = ctx.createGain();
+  const filter  = ctx.createBiquadFilter();
+  filter.type            = 'lowpass';
+  filter.frequency.value = 3200;
+  filter.Q.value         = 0.5;
+  master.gain.setValueAtTime(0.22, ctx.currentTime);
+  // Fade in gently
+  master.gain.linearRampToValueAtTime(0.32, ctx.currentTime + beat * 4);
+  master.connect(filter);
+  filter.connect(ctx.destination);
   bgmNodes.push(master);
 
-  // ── Pad (sustained chords) ──
-  // One full repeat of the melody length
-  const totalMelodyBeats = track.melody.reduce((s, [, d]) => s + d, 0);
-  const padDuration       = totalMelodyBeats * beat;
-  track.pad.forEach(interval => {
-    const freq = semitoneToHz(track.rootHz, track.scale[interval] ?? interval);
-    bgmNote(ctx, master, freq, ctx.currentTime, padDuration, 'sine', 0.035);
-  });
+  // ── Bass ostinato ──
+  // Plays intro bars before melody enters (Toby Fox intro paradigm)
+  const bassBarBeats = track.bass.reduce((s,[,d]) => s + d, 0);
+  const bassLoops    = Math.ceil(
+    (track.intro * bassBarBeats + track.melody.reduce((s,[,d])=>s+d,0) * 2) / bassBarBeats
+  ) + 1;
 
-  // ── Bass line ──
-  let bassTime = ctx.currentTime;
-  for (const [noteIdx, dur] of track.bass) {
-    const semis = track.scale[noteIdx % track.scale.length];
-    const freq  = semitoneToHz(track.rootHz, semis);
-    bgmNote(ctx, master, freq, bassTime, dur * beat * 0.85, 'triangle', 0.055);
-    bassTime += dur * beat;
+  let bassT = ctx.currentTime;
+  for (let loop = 0; loop < bassLoops; loop++) {
+    for (const [hz, dur] of track.bass) {
+      bgmNote(ctx, master, hz, bassT, swungDur(dur) * 0.88, track.bassType, 0.06);
+      bassT += swungDur(dur);
+    }
   }
 
-  // ── Melody ──
-  let melTime = ctx.currentTime;
-  for (const [noteIdx, dur] of track.melody) {
-    const semis  = track.scale[noteIdx % track.scale.length];
-    const freq   = semitoneToHz(track.rootHz * 2, semis); // octave up
-    bgmNote(ctx, master, freq, melTime, dur * beat * 0.88, 'sine', 0.045);
-    melTime += dur * beat;
+  // ── Pad chords (start after intro) ──
+  let padT = ctx.currentTime + track.intro * bassBarBeats * beat;
+  for (let rep = 0; rep < 2; rep++) { // two full repeats of chord progression
+    for (const [notes, dur] of track.chords) {
+      for (const hz of notes) {
+        bgmNote(ctx, master, hz, padT, dur * beat * 0.95, 'sine', 0.022);
+      }
+      padT += dur * beat;
+    }
   }
 
-  // Schedule next track after this one finishes
-  const trackDuration = Math.max(bassTime, melTime) - ctx.currentTime;
+  // ── Melody (enters after intro, played twice) ──
+  let melT = ctx.currentTime + track.intro * bassBarBeats * beat;
+  swingCounter = 0;
+  for (let rep = 0; rep < 2; rep++) {
+    for (const [hz, dur] of track.melody) {
+      const d = swungDur(dur);
+      bgmNote(ctx, master, hz, melT, d * 0.85, track.lead, 0.05);
+      melT += d;
+    }
+  }
+
+  // ── Schedule next track ──
+  const totalDur = Math.max(bassT, melT) - ctx.currentTime;
   bgmTrackTimer = setTimeout(() => {
     stopBgmNodes();
-    if (bgmEnabled) {
-      // Pick a different track at random
-      const next = (trackIdx + 1 + Math.floor(Math.random() * (BGM_TRACKS.length - 1))) % BGM_TRACKS.length;
-      bgmTrackIndex = next;
-      playTrack(next);
-    }
-  }, (trackDuration + 0.5) * 1000);
+    if (!bgmEnabled) return;
+    const next = (trackIdx + 1 + Math.floor(Math.random() * (BGM_TRACKS.length - 1))) % BGM_TRACKS.length;
+    bgmTrackIndex = next;
+    playTrack(next);
+  }, (totalDur + 0.3) * 1000);
 }
 
 function stopBgmNodes() {
@@ -3982,8 +4257,7 @@ function stopBgmNodes() {
 
 function startBgm() {
   stopBgmNodes();
-  bgmPlaying = true;
-  // Start with a random track
+  bgmPlaying    = true;
   bgmTrackIndex = Math.floor(Math.random() * BGM_TRACKS.length);
   playTrack(bgmTrackIndex);
 }
@@ -3999,16 +4273,14 @@ function toggleBgm() {
   const btn = document.getElementById('btn-music');
   btn.classList.toggle('music-on', bgmEnabled);
   btn.textContent = bgmEnabled ? '♪ Music' : '♩ Music';
-  if (bgmEnabled) startBgm();
-  else stopBgm();
+  if (bgmEnabled) startBgm(); else stopBgm();
 }
 
-// Kick off BGM on first user interaction (browser autoplay policy)
 function ensureBgmStarted() {
   if (bgmEnabled && !bgmPlaying) startBgm();
 }
 
-// ── Apply initial music button state ──
+// Apply initial button state on page load
 document.getElementById('btn-music').classList.toggle('music-on', bgmEnabled);
 document.getElementById('btn-music').textContent = bgmEnabled ? '♪ Music' : '♩ Music';
 
