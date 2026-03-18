@@ -497,9 +497,11 @@ body::before {
    GAME OVER SCREEN
 ═══════════════════════════════════════════ */
 #gameover {
-  position: fixed; inset: 0; display: none;
+  position: fixed; inset: 0;
+  display: none;
   align-items: center; justify-content: center;
-  z-index: 300; background: rgba(9,9,14,.90);
+  z-index: 300;
+  background: rgba(9,9,14,.90);
   padding: var(--sp-4);
 }
 #gameover.on { display: flex; }
@@ -514,6 +516,9 @@ body::before {
   box-shadow: 0 8px 48px rgba(0,0,0,.6);
   animation: fadeUp 180ms ease both;
   width: min(90vw, 400px);
+  /* Force the box into its own stacking context so HUD transforms don't affect it */
+  isolation: isolate;
+  transform: none;
 }
 
 .go-title {
@@ -522,7 +527,7 @@ body::before {
   font-weight: 800;
   color: var(--text); letter-spacing: .06em;
   margin-bottom: var(--sp-1);
-  width: 100%;
+  width: 100%; text-align: center;
 }
 
 .go-sub {
@@ -531,10 +536,18 @@ body::before {
   color: var(--text-dim);
   margin-bottom: var(--sp-5);
   text-transform: uppercase; line-height: 2;
-  width: 100%;
+  width: 100%; text-align: center;
 }
 
-.go-btns { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; }
+.go-btns {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  width: 100%;
+}
+.go-btns .btn {
+  width: 100%;
+  min-width: unset;
+  text-align: center;
+}
 
 
 /* ═══════════════════════════════════════════
@@ -800,23 +813,6 @@ body::before {
 }
 
 
-/* ── Music toggle — fixed corner button ── */
-#btn-music {
-  position: fixed; bottom: var(--sp-4); right: var(--sp-4);
-  z-index: 110;
-  font-family: var(--font-mono);
-  font-size: .52rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-  padding: var(--sp-1) var(--sp-2);
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: rgba(9,9,14,.82);
-  color: var(--text-dim); cursor: pointer;
-  transition: background var(--ease), border-color var(--ease), color var(--ease);
-  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-}
-#btn-music:hover   { border-color: var(--border-active); color: var(--text); }
-#btn-music.music-on { border-color: var(--accent); color: var(--accent-bright); background: rgba(74,127,165,.08); }
-
 /* ── History panel copy button ── */
 #history-copy-btn {
   margin-left: auto;
@@ -855,9 +851,47 @@ body::before {
 .btn-copy-link:hover { background: rgba(74,127,165,.1); border-color: var(--accent); }
 
 
-/* ═══════════════════════════════════════════
-   KEYFRAME LIBRARY
-═══════════════════════════════════════════ */
+/* ── Cat button — tiny fixed bottom-right ── */
+#btn-cat {
+  position: fixed; bottom: var(--sp-4); right: var(--sp-4);
+  z-index: 500;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,180,200,.35);
+  background: rgba(9,9,14,.75);
+  font-size: .9rem; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 120ms ease, border-color 120ms ease;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+#btn-cat:hover  { transform: scale(1.2); border-color: rgba(255,180,200,.7); }
+#btn-cat:active { transform: scale(.9); }
+
+/* Cat sticker — JS physics drives position, only opacity/scale via CSS */
+.cat-sticker {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  will-change: transform, opacity;
+  transform-origin: center center;
+}
+.cat-sticker img {
+  object-fit: cover;
+  border-radius: 12px;
+  border: 3px solid rgba(255,200,220,.8);
+  box-shadow: 0 8px 32px rgba(0,0,0,.65);
+  display: block;
+}
+.cat-sticker .meow-label {
+  font-family: var(--font-mono);
+  font-size: .7rem; font-weight: 700;
+  color: #ffb0cc;
+  letter-spacing: .1em;
+  text-shadow: 0 2px 6px rgba(0,0,0,.9);
+}
+
+
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -926,8 +960,8 @@ body::before {
 
 <canvas id="c"></canvas>
 <div id="chkflash"></div>
-<!-- Music toggle — always visible, fixed corner -->
-<button id="btn-music" title="Toggle music">♪ Music</button>
+<!-- Cat button — tiny easter egg, bottom right -->
+<button id="btn-cat" title="🐱">🐱</button>
 
 <!-- ════════════════════════════════════════════
      LANDING
@@ -2838,8 +2872,7 @@ function startGame(m, col, diff, timerSeconds = 0) {
   initTimer(timerSeconds);
   startTimerTick();
   refreshHUD();
-  updateSfTag(); // show engine status badge
-  ensureBgmStarted(); // music starts on first game if not already playing
+  updateSfTag();
 
   // If AI goes first (player chose black)
   if (m === 'ai' && chess.turn !== myColor) setTimeout(runAi, 1200);
@@ -3246,7 +3279,7 @@ function updatePaletteActiveState() {
 }
 
 // Full validation with check detection using the engine's own inCheck().
-// Returns { ok: bool, message: string }
+// Returns { ok: bool, msg: string }
 function setupValidateFull() {
   const wKings = countPieces(setupBoard, PT.K, W);
   const bKings = countPieces(setupBoard, PT.K, B);
@@ -3257,21 +3290,41 @@ function setupValidateFull() {
   if (wKings > 1)    return { ok: false, msg: 'Only one white king allowed' };
   if (bKings > 1)    return { ok: false, msg: 'Only one black king allowed' };
 
-  // Use the engine to check for immediate check — borrow a temporary Chess instance
+  // Build probe instance for structural checks
   const probe = new Chess();
-  probe.bd    = setupBoard.map(row => row.map(p => p ? {...p} : null));
-  probe.cr    = { w:{ k:0, q:0 }, b:{ k:0, q:0 } };
-  probe.ep    = null;
+  probe.bd = setupBoard.map(row => row.map(p => p ? {...p} : null));
+  probe.cr = { w:{ k:0, q:0 }, b:{ k:0, q:0 } };
+  probe.ep = null;
 
-  // White's king must not be in check from black (it's white's turn first)
+  // Neither king may already be in check at start
   probe.turn = W;
   if (probe.inCheck(W)) return { ok: false, msg: 'White king is in check at start' };
-
-  // Black's king also must not be in check — white just moved, black can't be in check
-  // unless the position is otherwise illegal
   if (probe.inCheck(B)) return { ok: false, msg: 'Black king is in check at start' };
 
-  return { ok: true, msg: `${setupBoard.flat().filter(Boolean).length} pieces — ready` };
+  // ── Checkmate-possible check ──────────────────────────────────
+  // A position where one side has only a king and the other also only
+  // has a king (KK) is a dead draw — checkmate is impossible.
+  // More generally: bare king vs bare king, or KK+bishop/knight are
+  // insufficient material. We check that at least one side has a piece
+  // that can deliver check — i.e. something beyond just the king.
+  // Simplest reliable rule: at least one non-king piece must exist,
+  // AND white must have at least one legal move that doesn't immediately
+  // leave the game in stalemate (the engine will handle that at play time).
+  const allPieces = setupBoard.flat().filter(Boolean);
+  const nonKings  = allPieces.filter(p => p.t !== PT.K);
+
+  if (nonKings.length === 0) {
+    return { ok: false, msg: 'King vs King — checkmate is impossible' };
+  }
+
+  // Check that white has at least one legal move (not already stalemate/checkmate)
+  probe.turn = W;
+  probe._updateStatus();
+  if (probe.status === 'stalemate')  return { ok: false, msg: 'White is already in stalemate' };
+  if (probe.status === 'checkmate')  return { ok: false, msg: 'White is already in checkmate' };
+
+  const total = allPieces.length;
+  return { ok: true, msg: `${total} piece${total !== 1 ? 's' : ''} — ready` };
 }
 
 function updateSetupStatus() {
@@ -3774,12 +3827,6 @@ window.addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 
-// Music toggle
-document.getElementById('btn-music').addEventListener('click', () => {
-  ensureBgmStarted(); // first click starts audio context
-  toggleBgm();
-});
-
 // Invite link copy button
 document.getElementById('op-copy-link').addEventListener('click', () => {
   const code = document.getElementById('op-code').textContent;
@@ -3811,478 +3858,10 @@ document.getElementById('history-copy-btn').addEventListener('click', () => {
   SFX.copyCode();
 });
 
-// Start BGM on any user interaction with the landing (browser autoplay policy)
-document.getElementById('landing').addEventListener('click', ensureBgmStarted, { once: true });
-
 // Check URL for invite code on load
 checkUrlForJoinCode();
 
 
-// ═══════════════════════════════════════════
-//  14. BACKGROUND MUSIC — 8 tracks, proper music theory
-//
-//  Inspired by Undertale / Deltarune / Mario / Balatro.
-//  All synthesis via Web Audio API — no files, no CDN.
-//
-//  Architecture per track:
-//    - Ostinato bass establishes first (Toby Fox approach)
-//    - Melody enters after 1 bar intro, 8-bar parallel period
-//      (question phrase bars 1–4, answer phrase bars 5–8)
-//    - Each melodic unit repeated twice before advancing
-//    - Chord pad sustains underneath
-//
-//  Note representation: absolute Hz using equal temperament A4=440.
-//  Each track defines: bpm, bars, chordProg[], bassLine[], melody[].
-//  Notes are [hz, beatDuration] pairs. Duration in quarter-note beats.
-// ═══════════════════════════════════════════
-
-let bgmCtx        = null;
-let bgmNodes      = [];
-let bgmPlaying    = false;
-let bgmEnabled    = localStorage.getItem('bgm') !== 'off';
-let bgmTrackIndex = 0;
-let bgmTrackTimer = null;
-
-// ── Equal temperament note table ────────────
-// C4 = 261.63 Hz as anchor.
-const N = (() => {
-  const A4 = 440;
-  // Returns Hz for note name + octave, e.g. N('C',4), N('F#',3)
-  const NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-  return (name, oct) => {
-    const idx = NAMES.indexOf(name.replace('b', '#')
-      .replace('Db','C#').replace('Eb','D#').replace('Gb','F#')
-      .replace('Ab','G#').replace('Bb','A#'));
-    const semis = (oct - 4) * 12 + (idx - 9); // offset from A4
-    return A4 * Math.pow(2, semis / 12);
-  };
-})();
-
-// ── 8 Track Definitions ──────────────────────
-// Each track:
-//   bpm        — quarter note BPM
-//   swing      — 0–0.5, amount of swing (0 = straight, 0.5 = full triplet swing)
-//   intro      — bars of bass-only before melody enters (Undertale intro paradigm)
-//   bass[]     — [hz, beats] sequence, loops for full track duration
-//   chords[]   — [[hz,hz,hz], beats] sustained pad chords, one per bar
-//   melody[]   — [hz, beats] 8-bar phrase (question 4 + answer 4), played TWICE
-//   lead       — oscillator type for melody ('square'=chiptune, 'sine'=smooth)
-//   bassType   — oscillator type for bass ('triangle'=warm NES bass)
-
-const BGM_TRACKS = [
-
-  // ── Track 1: "Once Upon a Time" (Undertale-style)
-  // A minor, 120 BPM. i–VI–III–VII progression (classic Toby Fox).
-  // Ostinato eighth-note bass, parallel period melody, square lead.
-  // Question phrase rises (tonic→dominant), answer resolves (dominant→tonic).
-  {
-    name: 'Once Upon a Time',
-    bpm: 120, swing: 0, intro: 1,
-    bassType: 'triangle', lead: 'square',
-    // Ostinato: Am–F–C–G bass roots, one note per beat
-    bass: [
-      [N('A',2),1],[N('A',2),.5],[N('C',3),.5],
-      [N('F',2),1],[N('F',2),.5],[N('A',2),.5],
-      [N('C',3),1],[N('C',3),.5],[N('E',3),.5],
-      [N('G',2),1],[N('G',2),.5],[N('B',2),.5],
-    ],
-    // Pad chords: Am, F, C, G (i–VI–III–VII in A minor)
-    chords: [
-      [[N('A',3),N('C',4),N('E',4)], 4],
-      [[N('F',3),N('A',3),N('C',4)], 4],
-      [[N('C',3),N('E',3),N('G',3)], 4],
-      [[N('G',3),N('B',3),N('D',4)], 4],
-    ],
-    // 8-bar melody: question (A–C–E climb, peak at E5) → answer (resolves to A4)
-    // Each phrase is 4 beats. Played twice = 16 bars total.
-    melody: [
-      // Question phrase: rises, ends on E (5th, tension)
-      [N('A',4),.5],[N('C',5),.5],[N('E',5),1],[N('E',5),.5],[N('D',5),.5],
-      [N('C',5),1],[N('A',4),1],[N('B',4),1],[N('E',5),1],
-      [N('D',5),.5],[N('C',5),.5],[N('B',4),1],[N('G',4),.5],[N('A',4),.5],[N('B',4),1],
-      [N('C',5),1.5],[N('B',4),.5],[N('A',4),2],
-      // Answer phrase: mirrors question opening but resolves down to A4 (tonic)
-      [N('A',4),.5],[N('C',5),.5],[N('E',5),1],[N('E',5),.5],[N('D',5),.5],
-      [N('C',5),1],[N('D',5),1],[N('E',5),1],[N('D',5),.5],[N('C',5),.5],
-      [N('B',4),.5],[N('A',4),.5],[N('G',4),1],[N('F',4),.5],[N('E',4),.5],[N('G',4),1],
-      [N('A',4),4],
-    ],
-  },
-
-  // ── Track 2: "Ruins" (Undertale ambient, A natural minor)
-  // 80 BPM, slow and melancholy. i–iv–v–i. Sine lead for warmth.
-  // Toby Fox-style: simple repeated motif, contemplative.
-  {
-    name: 'Ruins',
-    bpm: 80, swing: 0, intro: 2,
-    bassType: 'triangle', lead: 'sine',
-    bass: [
-      [N('A',2),2],[N('D',3),2],
-      [N('E',3),2],[N('A',2),2],
-    ],
-    chords: [
-      [[N('A',3),N('C',4),N('E',4)], 4],  // i
-      [[N('D',3),N('F',3),N('A',3)], 4],  // iv
-      [[N('E',3),N('G',3),N('B',3)], 4],  // v (minor v for natural minor feel)
-      [[N('A',3),N('C',4),N('E',4)], 4],  // i
-    ],
-    melody: [
-      // Question: starts on 5th, gentle descent with a hitch
-      [N('E',5),2],[N('D',5),1],[N('C',5),1],
-      [N('B',4),1.5],[N('A',4),.5],[N('B',4),1],[N('C',5),1],
-      [N('A',4),2],[N('G',4),2],
-      [N('F',4),1],[N('E',4),1],[N('F',4),1],[N('A',4),1],
-      // Answer: same opening, but resolves conclusively to A4
-      [N('E',5),2],[N('D',5),1],[N('C',5),1],
-      [N('B',4),1],[N('A',4),1],[N('G',4),2],
-      [N('F',4),1],[N('E',4),1],[N('D',4),1.5],[N('E',4),.5],
-      [N('A',4),4],
-    ],
-  },
-
-  // ── Track 3: "Overworld" (Mario-style, C major)
-  // 100 BPM, swing 0.15 (ragtime feel). I–IV–V–IV progression.
-  // Square wave lead (NES-authentic). Syncopated melody on chord tones.
-  // Modal cadence ♭VI–♭VII–I in bars 7–8 (the "Mario cadence").
-  {
-    name: 'Overworld',
-    bpm: 100, swing: 0.15, intro: 0,
-    bassType: 'triangle', lead: 'square',
-    bass: [
-      [N('C',3),1],[N('G',2),1],[N('C',3),1],[N('G',2),1],   // I
-      [N('F',2),1],[N('C',3),1],[N('F',2),1],[N('C',3),1],   // IV
-      [N('G',2),1],[N('D',3),1],[N('G',2),1],[N('D',3),1],   // V
-      [N('F',2),1],[N('C',3),1],[N('F',2),1],[N('C',3),1],   // IV
-    ],
-    chords: [
-      [[N('C',3),N('E',3),N('G',3)], 4],   // I
-      [[N('F',3),N('A',3),N('C',4)], 4],   // IV
-      [[N('G',3),N('B',3),N('D',4)], 4],   // V
-      [[N('F',3),N('A',3),N('C',4)], 4],   // IV → ♭VI–♭VII–I in melody
-    ],
-    melody: [
-      // Question: arpeggiated C major chord, swing feel, syncopated
-      [N('E',5),.5],[N('E',5),.5],[N('E',5),1],
-      [N('C',5),.5],[N('E',5),.5],[N('G',5),1],[N('G',4),.5],[0,0.5],
-      [N('A',4),1],[N('B',4),.5],[N('A',4),.5],[N('G',4),.33],[N('B',5),.33],[N('E',5),.34],
-      [N('D',5),.5],[N('C',5),.5],[0,2],[N('G',4),.5],[N('F',4),.5],
-      // Answer: descends, ends with ♭VI–♭VII–I (Ab–Bb–C) modal cadence
-      [N('E',5),.5],[N('E',5),.5],[N('E',5),1],
-      [N('C',5),.5],[N('E',5),.5],[N('G',5),1],[N('G',5),.5],[0,.5],
-      [N('Ab',5),.5],[N('Ab',5),.5],[N('Bb',5),.5],[N('Bb',5),.5], // ♭VI–♭VII
-      [N('C',5),2],[N('G',4),.5],[N('C',5),.5],[0,1],              // → I resolve
-    ],
-  },
-
-  // ── Track 4: "Snowdin Town" (Undertale, C major/minor mix)
-  // 130 BPM, cheerful but slightly wistful. I–V–vi–IV (pop/Toby Fox).
-  // Square lead. Short repeated motif, energetic.
-  {
-    name: 'Snowdin Town',
-    bpm: 130, swing: 0, intro: 1,
-    bassType: 'triangle', lead: 'square',
-    bass: [
-      [N('C',3),1],[N('E',3),.5],[N('G',3),.5],
-      [N('G',2),1],[N('B',2),.5],[N('D',3),.5],
-      [N('A',2),1],[N('C',3),.5],[N('E',3),.5],
-      [N('F',2),1],[N('A',2),.5],[N('C',3),.5],
-    ],
-    chords: [
-      [[N('C',3),N('E',3),N('G',3)], 4],   // I
-      [[N('G',3),N('B',3),N('D',4)], 4],   // V
-      [[N('A',3),N('C',4),N('E',4)], 4],   // vi
-      [[N('F',3),N('A',3),N('C',4)], 4],   // IV
-    ],
-    melody: [
-      // Question: bright, stepwise rise, ends on D5 (tension over I chord)
-      [N('C',5),.5],[N('D',5),.5],[N('E',5),1],[N('G',5),1],[N('E',5),.5],[N('D',5),.5],
-      [N('D',5),.5],[N('B',4),.5],[N('G',4),1],[N('A',4),.5],[N('B',4),.5],[N('C',5),1],
-      [N('E',5),.5],[N('D',5),.5],[N('C',5),.5],[N('B',4),.5],[N('A',4),1],[N('G',4),1],
-      [N('A',4),.5],[N('C',5),.5],[N('B',4),.5],[N('A',4),.5],[N('G',4),2],
-      // Answer: same opening, resolves triumphantly to C5
-      [N('C',5),.5],[N('D',5),.5],[N('E',5),1],[N('G',5),1],[N('E',5),.5],[N('D',5),.5],
-      [N('D',5),.5],[N('E',5),.5],[N('F',5),1],[N('E',5),.5],[N('D',5),.5],[N('C',5),1],
-      [N('G',4),.5],[N('A',4),.5],[N('B',4),.5],[N('C',5),.5],[N('D',5),1],[N('E',5),1],
-      [N('C',5),4],
-    ],
-  },
-
-  // ── Track 5: "Joker's Theme" (Balatro-style, 7/4 meter, E minor)
-  // 90 BPM in 7/4. Jazz-influenced, hypnotic, slightly unsettling.
-  // i–VI–III–VII but phrased in 7 (4+3 grouping). Sine pad, triangle bass.
-  // The irregular meter is the defining Balatro characteristic.
-  {
-    name: "Joker's Theme",
-    bpm: 90, swing: 0.08, intro: 1,
-    bassType: 'triangle', lead: 'sine',
-    // 7-beat bar bass pattern (4+3 feel like Balatro)
-    bass: [
-      [N('E',2),1],[N('E',2),.5],[N('B',2),.5],[N('E',2),1],[N('G',2),.5],[N('A',2),.5],// 4 beats
-      [N('C',3),.5],[N('B',2),.5],[N('E',2),.5],[N('Eb',3),.5],[N('E',2),.5],[N('D',3),.5],// 3 beats ×2 bars
-    ],
-    chords: [
-      [[N('E',3),N('G',3),N('B',3)], 7],   // i (7 beats)
-      [[N('C',3),N('E',3),N('G',3)], 7],   // VI
-      [[N('G',2),N('B',2),N('D',3)], 7],   // III
-      [[N('D',3),N('F#',3),N('A',3)], 7],  // VII
-    ],
-    melody: [
-      // Question in 7/4: 4+3 grouping, jazzy chromatic approach notes
-      [N('E',5),1],[N('F#',5),.5],[N('G',5),.5],[N('A',5),1],[N('B',5),.5],[N('A',5),.5], // 4 beats
-      [N('G',5),.5],[N('F#',5),.5],[N('E',5),1.5],                                          // 3 beats (= 7)
-      [N('D',5),1],[N('C',5),.5],[N('B',4),.5],[N('C',5),1],[N('D',5),.5],[N('E',5),.5],
-      [N('F#',5),.5],[N('E',5),.5],[N('D',5),1.5],
-      // Answer resolves to E5 with chromatic lower neighbour Eb
-      [N('G',5),1],[N('A',5),.5],[N('B',5),.5],[N('C',6),1],[N('B',5),.5],[N('A',5),.5],
-      [N('G',5),.5],[N('F#',5),.5],[N('E',5),1.5],
-      [N('Eb',5),.5],[N('E',5),.5],[N('F#',5),1],[N('G',5),.5],[N('A',5),.5],[N('B',5),.5],[N('A',5),.5],
-      [N('E',5),3.5],
-    ],
-  },
-
-  // ── Track 6: "Field of Hopes" (Deltarune-style, D major)
-  // 140 BPM, bright, driving, SNES-esque layering. I–V–vi–IV then I–IV–V–I.
-  // Square wave lead, energetic 8th-note bass, the "Field of Hopes and Dreams" vibe.
-  {
-    name: 'Field of Hopes',
-    bpm: 140, swing: 0, intro: 1,
-    bassType: 'triangle', lead: 'square',
-    bass: [
-      [N('D',3),.5],[N('D',3),.5],[N('A',3),.5],[N('A',3),.5],   // I
-      [N('A',2),.5],[N('A',2),.5],[N('E',3),.5],[N('E',3),.5],   // V
-      [N('B',2),.5],[N('B',2),.5],[N('F#',3),.5],[N('F#',3),.5], // vi
-      [N('G',2),.5],[N('G',2),.5],[N('D',3),.5],[N('D',3),.5],   // IV
-    ],
-    chords: [
-      [[N('D',3),N('F#',3),N('A',3)], 4],   // I
-      [[N('A',3),N('C#',4),N('E',4)], 4],   // V
-      [[N('B',3),N('D',4),N('F#',4)], 4],   // vi
-      [[N('G',3),N('B',3),N('D',4)], 4],    // IV
-    ],
-    melody: [
-      // Question: bold upward leap, energetic Deltarune feel
-      [N('D',5),.5],[N('F#',5),.5],[N('A',5),1],[N('A',5),.5],[N('B',5),.5],
-      [N('A',5),.5],[N('G',5),.5],[N('F#',5),1],[N('E',5),.5],[N('D',5),.5],
-      [N('B',5),.5],[N('A',5),.5],[N('G',5),.5],[N('F#',5),.5],[N('E',5),1],[N('D',5),1],
-      [N('E',5),.5],[N('F#',5),.5],[N('G',5),1],[N('A',5),2],
-      // Answer: higher energy, extra step climb, resolves with a drop
-      [N('D',5),.5],[N('F#',5),.5],[N('A',5),1],[N('B',5),.5],[N('C#',6),.5],
-      [N('D',6),.5],[N('C#',6),.5],[N('B',5),.5],[N('A',5),.5],[N('G',5),1],
-      [N('F#',5),.5],[N('E',5),.5],[N('F#',5),.5],[N('G',5),.5],[N('A',5),1],[N('B',5),.5],[N('A',5),.5],
-      [N('D',5),4],
-    ],
-  },
-
-  // ── Track 7: "Underground" (Mario cave/underworld-style, C minor)
-  // 95 BPM, foreboding, chromatic bass descent (lamento bass).
-  // i–♭VII–♭VI–V: the classic minor sequence Kondo used for castles.
-  // The lamento bass (descending C–B–Bb–A–Ab–G) is the defining texture.
-  {
-    name: 'Underground',
-    bpm: 95, swing: 0, intro: 1,
-    bassType: 'triangle', lead: 'square',
-    // Chromatic lamento bass descent: C→B→Bb→A→Ab→G→... (iconic castle feel)
-    bass: [
-      [N('C',3),1],[N('B',2),1],[N('Bb',2),1],[N('A',2),1],
-      [N('Ab',2),1],[N('G',2),1],[N('F',2),1],[N('G',2),1],
-    ],
-    chords: [
-      [[N('C',3),N('Eb',3),N('G',3)], 4],    // i
-      [[N('Bb',2),N('D',3),N('F',3)], 4],    // ♭VII
-      [[N('Ab',2),N('C',3),N('Eb',3)], 4],   // ♭VI
-      [[N('G',2),N('B',2),N('D',3)], 4],     // V (major — tension resolution)
-    ],
-    melody: [
-      // Question: chromatic approach, nervous energy, ends unresolved on G
-      [N('G',5),.5],[N('Ab',5),.5],[N('G',5),1],[N('Eb',5),.5],[N('F',5),.5],
-      [N('G',5),1],[N('F',5),.5],[N('Eb',5),.5],[N('D',5),1],[N('Eb',5),1],
-      [N('F',5),.5],[N('Eb',5),.5],[N('D',5),.5],[N('C',5),.5],[N('Bb',4),1],[N('Ab',4),1],
-      [N('G',4),.5],[N('Ab',4),.5],[N('Bb',4),1],[N('G',4),2],
-      // Answer: same tension, resolves downward to C (tonic at last)
-      [N('G',5),.5],[N('Ab',5),.5],[N('G',5),1],[N('Eb',5),.5],[N('F',5),.5],
-      [N('G',5),1],[N('Ab',5),1],[N('Bb',5),.5],[N('Ab',5),.5],[N('G',5),1],
-      [N('F',5),.5],[N('Eb',5),.5],[N('D',5),1],[N('C',5),.5],[N('Bb',4),.5],[N('Ab',4),1],
-      [N('G',4),.5],[N('F',4),.5],[N('Eb',4),.5],[N('D',4),.5],[N('C',4),2],
-    ],
-  },
-
-  // ── Track 8: "Battle Theme" (Undertale boss-inspired, A minor)
-  // 160 BPM, intense, driving. i–iv–♭VI–♭VII ostinato (Megalovania-style).
-  // Fast repeated ostinato bass, square wave, punchy short notes.
-  {
-    name: 'Battle Theme',
-    bpm: 160, swing: 0, intro: 1,
-    bassType: 'triangle', lead: 'square',
-    // Megalovania-style: rapid ostinato on i–iv–♭VI–♭VII
-    bass: [
-      [N('A',2),.5],[N('A',2),.5],[N('A',3),.5],[N('G',3),.5],
-      [N('F',2),.5],[N('F',2),.5],[N('F',3),.5],[N('E',3),.5],
-      [N('F',2),.5],[N('F',2),.5],[N('F',3),.5],[N('E',3),.5],
-      [N('G',2),.5],[N('G',2),.5],[N('G',3),.5],[N('F',3),.5],
-    ],
-    chords: [
-      [[N('A',3),N('C',4),N('E',4)], 4],   // i
-      [[N('D',3),N('F',3),N('A',3)], 4],   // iv
-      [[N('F',3),N('A',3),N('C',4)], 4],   // ♭VI
-      [[N('G',3),N('B',3),N('D',4)], 4],   // ♭VII
-    ],
-    melody: [
-      // Question: aggressive, lots of repeated notes then a burst upward
-      [N('A',4),.25],[N('A',4),.25],[N('A',5),.5],[N('G',5),.5],[N('F',5),.5],
-      [N('E',5),.5],[N('F',5),.5],[N('G',5),.5],[N('E',5),1],
-      [N('D',5),.25],[N('D',5),.25],[N('D',5),.5],[N('C',5),.5],[N('D',5),.5],
-      [N('E',5),.5],[N('C',5),.5],[N('A',4),1.5],
-      // Answer: ramps up higher, classic Undertale "hero theme" feel
-      [N('A',4),.25],[N('A',4),.25],[N('A',5),.5],[N('G',5),.5],[N('F',5),.5],
-      [N('G',5),.5],[N('A',5),.5],[N('Bb',5),.5],[N('A',5),.5],[N('G',5),.5],
-      [N('F',5),.5],[N('E',5),.5],[N('D',5),.5],[N('E',5),.5],[N('F',5),.5],[N('G',5),.5],
-      [N('A',5),4],
-    ],
-  },
-
-];
-
-function getBgmCtx() {
-  if (!bgmCtx) bgmCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (bgmCtx.state === 'suspended') bgmCtx.resume();
-  return bgmCtx;
-}
-
-// Schedule a single BGM note with clean envelope
-function bgmNote(ctx, dest, hz, start, dur, type = 'triangle', vol = 0.05) {
-  if (!hz || hz <= 0) return; // skip rests (hz=0)
-  const osc  = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type            = type;
-  osc.frequency.value = hz;
-  const att = Math.min(0.015, dur * 0.1);
-  const rel = Math.min(0.06, dur * 0.25);
-  gain.gain.setValueAtTime(0, start);
-  gain.gain.linearRampToValueAtTime(vol, start + att);
-  gain.gain.setValueAtTime(vol, start + dur - rel);
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-  osc.connect(gain);
-  gain.connect(dest);
-  osc.start(start);
-  osc.stop(start + dur + 0.01);
-  bgmNodes.push(osc);
-}
-
-// Schedule and play one full track loop
-function playTrack(trackIdx) {
-  if (!bgmEnabled) return;
-  const ctx   = getBgmCtx();
-  const track = BGM_TRACKS[trackIdx % BGM_TRACKS.length];
-  const beat  = 60 / track.bpm;
-  const swing = track.swing || 0;
-
-  // Swing helper: even 8th notes get pushed, odd 8th notes shortened
-  let swingCounter = 0;
-  const swungDur = (dur) => {
-    // Only applies swing to 0.5-beat notes
-    if (dur !== 0.5) { swingCounter = 0; return dur * beat; }
-    const s = swingCounter % 2 === 0 ? dur * (1 + swing) : dur * (1 - swing);
-    swingCounter++;
-    return s * beat;
-  };
-
-  // ── Master gain chain ──
-  // Low-pass filter takes the edge off bright square waves
-  const master  = ctx.createGain();
-  const filter  = ctx.createBiquadFilter();
-  filter.type            = 'lowpass';
-  filter.frequency.value = 3200;
-  filter.Q.value         = 0.5;
-  master.gain.setValueAtTime(0.22, ctx.currentTime);
-  // Fade in gently
-  master.gain.linearRampToValueAtTime(0.32, ctx.currentTime + beat * 4);
-  master.connect(filter);
-  filter.connect(ctx.destination);
-  bgmNodes.push(master);
-
-  // ── Bass ostinato ──
-  // Plays intro bars before melody enters (Toby Fox intro paradigm)
-  const bassBarBeats = track.bass.reduce((s,[,d]) => s + d, 0);
-  const bassLoops    = Math.ceil(
-    (track.intro * bassBarBeats + track.melody.reduce((s,[,d])=>s+d,0) * 2) / bassBarBeats
-  ) + 1;
-
-  let bassT = ctx.currentTime;
-  for (let loop = 0; loop < bassLoops; loop++) {
-    for (const [hz, dur] of track.bass) {
-      bgmNote(ctx, master, hz, bassT, swungDur(dur) * 0.88, track.bassType, 0.06);
-      bassT += swungDur(dur);
-    }
-  }
-
-  // ── Pad chords (start after intro) ──
-  let padT = ctx.currentTime + track.intro * bassBarBeats * beat;
-  for (let rep = 0; rep < 2; rep++) { // two full repeats of chord progression
-    for (const [notes, dur] of track.chords) {
-      for (const hz of notes) {
-        bgmNote(ctx, master, hz, padT, dur * beat * 0.95, 'sine', 0.022);
-      }
-      padT += dur * beat;
-    }
-  }
-
-  // ── Melody (enters after intro, played twice) ──
-  let melT = ctx.currentTime + track.intro * bassBarBeats * beat;
-  swingCounter = 0;
-  for (let rep = 0; rep < 2; rep++) {
-    for (const [hz, dur] of track.melody) {
-      const d = swungDur(dur);
-      bgmNote(ctx, master, hz, melT, d * 0.85, track.lead, 0.05);
-      melT += d;
-    }
-  }
-
-  // ── Schedule next track ──
-  const totalDur = Math.max(bassT, melT) - ctx.currentTime;
-  bgmTrackTimer = setTimeout(() => {
-    stopBgmNodes();
-    if (!bgmEnabled) return;
-    const next = (trackIdx + 1 + Math.floor(Math.random() * (BGM_TRACKS.length - 1))) % BGM_TRACKS.length;
-    bgmTrackIndex = next;
-    playTrack(next);
-  }, (totalDur + 0.3) * 1000);
-}
-
-function stopBgmNodes() {
-  clearTimeout(bgmTrackTimer);
-  bgmTrackTimer = null;
-  bgmNodes.forEach(n => { try { n.stop?.(); n.disconnect?.(); } catch(e) {} });
-  bgmNodes = [];
-}
-
-function startBgm() {
-  stopBgmNodes();
-  bgmPlaying    = true;
-  bgmTrackIndex = Math.floor(Math.random() * BGM_TRACKS.length);
-  playTrack(bgmTrackIndex);
-}
-
-function stopBgm() {
-  stopBgmNodes();
-  bgmPlaying = false;
-}
-
-function toggleBgm() {
-  bgmEnabled = !bgmEnabled;
-  localStorage.setItem('bgm', bgmEnabled ? 'on' : 'off');
-  const btn = document.getElementById('btn-music');
-  btn.classList.toggle('music-on', bgmEnabled);
-  btn.textContent = bgmEnabled ? '♪ Music' : '♩ Music';
-  if (bgmEnabled) startBgm(); else stopBgm();
-}
-
-function ensureBgmStarted() {
-  if (bgmEnabled && !bgmPlaying) startBgm();
-}
-
-// Apply initial button state on page load
-document.getElementById('btn-music').classList.toggle('music-on', bgmEnabled);
-document.getElementById('btn-music').textContent = bgmEnabled ? '♪ Music' : '♩ Music';
 
 
 // ═══════════════════════════════════════════
@@ -4319,6 +3898,197 @@ function checkUrlForJoinCode() {
     document.getElementById('op-join-status').className   = 'op-status ok';
   }, 100);
 }
+
+// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+//  16. CAT BUTTON — easter egg
+//
+//  Real cat meow audio from Wikimedia Commons (CC0 public domain).
+//  4 recordings preloaded as HTMLAudioElement — instant playback.
+//  playbackRate randomised ±20% for pitch variety per meow.
+//
+//  Image pool: 12 cats preloaded from cataas.com on init.
+//  Physics: JS rAF loop, fires toward screen center with ±50° spread.
+//  3–5 large cats (130–260px) per click.
+//  2.5s cooldown — button dims and ignores clicks during cooldown.
+// ═══════════════════════════════════════════
+
+const MEOW_LABELS = ['meow!', 'mrow~', 'purrr', 'mew!', 'nya~', 'mreow', '...meow'];
+
+// ── Real cat meow sounds ─────────────────────
+// Wikimedia Commons direct media URLs. CC0 / public domain.
+// Two distinct recordings; cloned on each play so sounds can overlap.
+const CAT_SOUND_URLS = [
+  'https://upload.wikimedia.org/wikipedia/commons/2/21/Meow.ogg',
+  'https://upload.wikimedia.org/wikipedia/commons/5/55/Meow_domestic_cat.ogg',
+];
+const catAudioPool = CAT_SOUND_URLS.map(url => {
+  const a = new Audio(url);
+  a.preload = 'auto';
+  a.volume  = 0.75;
+  return a;
+});
+
+function playCatSound() {
+  try {
+    const src   = catAudioPool[Math.floor(Math.random() * catAudioPool.length)];
+    const clone = src.cloneNode();
+    // Randomise pitch ±20% for variety — each meow sounds slightly different
+    clone.playbackRate = 0.82 + Math.random() * 0.4;
+    clone.volume       = 0.65 + Math.random() * 0.25;
+    clone.play().catch(() => {});
+    clone.addEventListener('ended', () => { clone.src = ''; }, { once: true });
+  } catch(e) {}
+}
+
+// ── Image pool ───────────────────────────────
+const CAT_POOL_SIZE = 12;
+const CAT_IMG_SIZE  = 320;
+const catImagePool  = [];
+
+function preloadCatPool() {
+  for (let i = 0; i < CAT_POOL_SIZE; i++) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    setTimeout(() => {
+      img.src = `https://cataas.com/cat?width=${CAT_IMG_SIZE}&height=${CAT_IMG_SIZE}&v=${i}_${Date.now()}`;
+    }, i * 180);
+    catImagePool.push(img);
+  }
+}
+
+function getPooledCatImg() {
+  const loaded = catImagePool.filter(img => img.complete && img.naturalWidth > 0);
+  return loaded.length ? loaded[Math.floor(Math.random() * loaded.length)] : null;
+}
+
+// ── Cooldown ─────────────────────────────────
+const CAT_COOLDOWN_MS  = 2500;
+let   catCooldownEnd   = 0;
+let   catCooldownTimer = null;
+
+function startCatCooldown() {
+  const btn         = document.getElementById('btn-cat');
+  catCooldownEnd    = Date.now() + CAT_COOLDOWN_MS;
+  btn.disabled      = true;
+  btn.style.opacity = '0.35';
+  btn.style.cursor  = 'not-allowed';
+  btn.style.outline = '2px solid rgba(255,180,200,.5)';
+  clearTimeout(catCooldownTimer);
+  catCooldownTimer  = setTimeout(() => {
+    btn.disabled      = false;
+    btn.style.opacity = '1';
+    btn.style.cursor  = '';
+    btn.style.outline = '';
+  }, CAT_COOLDOWN_MS);
+}
+
+// ── Physics ──────────────────────────────────
+let activeCats  = [];
+let catRafId    = null;
+let lastCatTime = null;
+const CAT_GRAVITY = 520;
+
+function createCatPhysics(bx, by, img) {
+  const size   = 130 + Math.floor(Math.random() * 130); // 130–260px
+  const cx     = innerWidth  / 2;
+  const cy     = innerHeight / 2;
+  const base   = Math.atan2(cy - by, cx - bx);
+  const spread = (Math.random() - 0.5) * (Math.PI * 0.55); // ±~50°
+  const speed  = 1100 + Math.random() * 700;
+  const vx     = Math.cos(base + spread) * speed;
+  const vy     = Math.sin(base + spread) * speed;
+
+  const el = document.createElement('div');
+  el.className = 'cat-sticker';
+
+  const imgEl = document.createElement('img');
+  imgEl.src   = img ? img.src
+    : `https://cataas.com/cat?width=${size}&height=${size}&v=${Math.random()}`;
+  imgEl.style.width  = size + 'px';
+  imgEl.style.height = size + 'px';
+  imgEl.alt   = '\uD83D\uDC31';
+
+  const label = document.createElement('div');
+  label.className   = 'meow-label';
+  label.textContent = MEOW_LABELS[Math.floor(Math.random() * MEOW_LABELS.length)];
+  label.style.fontSize = Math.max(0.6, size / 200) + 'rem';
+
+  el.append(imgEl, label);
+  el.style.left = (bx - size / 2) + 'px';
+  el.style.top  = (by - size / 2) + 'px';
+  document.body.appendChild(el);
+
+  return {
+    el,
+    px: bx - size / 2, py: by - size / 2,
+    vx, vy,
+    rot: (Math.random() - 0.5) * 540,
+    rotVal: 0,
+    life: 0, maxLife: 1.8 + Math.random() * 0.7,
+  };
+}
+
+function tickCats(ts) {
+  if (!activeCats.length) { catRafId = null; lastCatTime = null; return; }
+  const now = ts / 1000;
+  const dt  = lastCatTime ? Math.min(now - lastCatTime, 0.05) : 0.016;
+  lastCatTime = now;
+
+  for (let i = activeCats.length - 1; i >= 0; i--) {
+    const c = activeCats[i];
+    c.life   += dt;
+    c.vy     += CAT_GRAVITY * dt;
+    c.px     += c.vx * dt;
+    c.py     += c.vy * dt;
+    c.rotVal += c.rot * dt;
+
+    const r  = c.life / c.maxLife;
+    const op = r > 0.55 ? 1 - (r - 0.55) / 0.45 : 1;
+    const sc = r < 0.08 ? (r / 0.08) * 1.15 : Math.max(1, 1.15 - (r - 0.08) / 0.15 * 0.15);
+
+    c.el.style.left      = c.px + 'px';
+    c.el.style.top       = c.py + 'px';
+    c.el.style.opacity   = op;
+    c.el.style.transform = `rotate(${c.rotVal}deg) scale(${sc})`;
+
+    if (c.life >= c.maxLife) { c.el.remove(); activeCats.splice(i, 1); }
+  }
+  catRafId = requestAnimationFrame(tickCats);
+}
+
+// ── Main trigger ──────────────────────────────
+function explodeCats() {
+  if (Date.now() < catCooldownEnd) return;
+
+  const btn  = document.getElementById('btn-cat');
+  const rect = btn.getBoundingClientRect();
+  const bx   = rect.left + rect.width  / 2;
+  const by   = rect.top  + rect.height / 2;
+
+  // 1–2 real meow sounds
+  playCatSound();
+  if (Math.random() > 0.45) setTimeout(playCatSound, 90 + Math.random() * 150);
+
+  const count = 3 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < count; i++) {
+    activeCats.push(createCatPhysics(bx, by, getPooledCatImg()));
+  }
+  if (!catRafId) { lastCatTime = null; catRafId = requestAnimationFrame(tickCats); }
+
+  btn.style.animation = 'none';
+  void btn.offsetWidth;
+  btn.style.animation = 'shakeCss 280ms ease';
+  setTimeout(() => { btn.style.animation = ''; }, 300);
+  startCatCooldown();
+}
+
+document.getElementById('btn-cat').addEventListener('click', explodeCats);
+
+// Preload everything immediately
+preloadCatPool();
+catAudioPool.forEach(a => a.load());
+
 
 let animTime = 0;
 
