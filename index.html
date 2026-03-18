@@ -505,6 +505,7 @@ body::before {
 #gameover.on { display: flex; }
 
 .go-box {
+  display: flex; flex-direction: column; align-items: center;
   text-align: center;
   padding: var(--sp-6) clamp(var(--sp-5), 5vw, 56px);
   background: var(--surface);
@@ -521,6 +522,7 @@ body::before {
   font-weight: 800;
   color: var(--text); letter-spacing: .06em;
   margin-bottom: var(--sp-1);
+  width: 100%;
 }
 
 .go-sub {
@@ -529,9 +531,10 @@ body::before {
   color: var(--text-dim);
   margin-bottom: var(--sp-5);
   text-transform: uppercase; line-height: 2;
+  width: 100%;
 }
 
-.go-btns { display: flex; flex-direction: column; gap: var(--sp-2); }
+.go-btns { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; }
 
 
 /* ═══════════════════════════════════════════
@@ -577,8 +580,122 @@ body::before {
 
 
 /* ═══════════════════════════════════════════
-   FLOATING SCORE NUMBERS
+   SETUP MODE — pre-game board editor
 ═══════════════════════════════════════════ */
+#setup-overlay {
+  position: fixed; inset: 0; display: none;
+  flex-direction: column;
+  z-index: 80;
+  pointer-events: none; /* children re-enable selectively */
+}
+#setup-overlay.on { display: flex; }
+
+/* Top bar — title + actions */
+#setup-bar {
+  position: absolute; top: var(--sp-3);
+  left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: var(--sp-2);
+  pointer-events: all;
+  background: rgba(9,9,14,.88);
+  border: 1px solid var(--border-active);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2) var(--sp-3);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  white-space: nowrap;
+}
+
+#setup-bar-label {
+  font-family: var(--font-mono);
+  font-size: .58rem; font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--warm);
+}
+
+#setup-status {
+  font-family: var(--font-mono);
+  font-size: .52rem; letter-spacing: .08em;
+  color: var(--text-dim);
+  min-width: 120px;
+}
+#setup-status.err { color: var(--danger); }
+#setup-status.ok  { color: var(--ok); }
+
+/* Piece palette — horizontal scrollable tray pinned to bottom */
+#setup-palette {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  pointer-events: all;
+  background: rgba(9,9,14,.92);
+  border-top: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: var(--sp-2) var(--sp-3) calc(var(--sp-2) + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: var(--sp-1);
+}
+
+.palette-row {
+  display: flex; gap: var(--sp-1); align-items: center;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 2px; /* prevent clip on active border */
+}
+.palette-row::-webkit-scrollbar { display: none; }
+
+.palette-label {
+  font-family: var(--font-mono);
+  font-size: .44rem; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--text-dim);
+  flex-shrink: 0; width: 36px;
+}
+
+/* Individual piece chip in the palette */
+.pchip {
+  flex-shrink: 0;
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.5rem; font-family: serif;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--ease), border-color var(--ease), transform var(--ease);
+  touch-action: manipulation;
+  user-select: none;
+}
+.pchip:hover  { background: rgba(232,228,220,.06); border-color: var(--border-active); }
+.pchip.active {
+  border-color: var(--accent-bright);
+  background: rgba(74,127,165,.18);
+  transform: translateY(-2px);
+  box-shadow: 0 0 10px rgba(74,127,165,.3);
+}
+
+/* Erase chip */
+.pchip.erase  { font-size: 1rem; color: var(--text-dim); }
+.pchip.erase.active { border-color: var(--danger); background: rgba(192,68,76,.15); }
+
+/* Bottom action buttons row */
+#setup-actions {
+  display: flex; gap: var(--sp-2); justify-content: center;
+  padding-top: var(--sp-1);
+  flex-wrap: wrap;
+}
+#setup-actions .btn {
+  flex: 1; min-width: 100px; max-width: 180px;
+  padding: 10px var(--sp-3);
+}
+
+/* Held-piece ghost cursor shown while a piece is selected */
+#setup-cursor {
+  position: fixed;
+  pointer-events: none;
+  z-index: 90;
+  font-size: 2rem; font-family: serif;
+  transform: translate(-50%, -50%);
+  display: none;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,.6));
+}
+
 .dmg {
   position: fixed;
   font-family: var(--font-mono); font-size: .82rem; font-weight: 700;
@@ -596,6 +713,91 @@ body::before {
   z-index: 150; background: rgba(192,68,76,.10); display: none;
 }
 #chkflash.on { display: block; animation: chkAnim 400ms ease forwards; }
+
+
+/* ═══════════════════════════════════════════
+   MOVE HISTORY PANEL — collapsible HUD drawer
+═══════════════════════════════════════════ */
+#history-panel {
+  position: absolute;
+  bottom: calc(var(--sp-4) + 32px + var(--sp-2)); /* sits above ← Menu */
+  left: var(--sp-4);
+  width: 160px;
+  max-height: 220px;
+  pointer-events: all;
+  display: none;
+  flex-direction: column;
+  background: rgba(9,9,14,.88);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  overflow: hidden;
+}
+#history-panel.open { display: flex; }
+
+#history-header {
+  font-family: var(--font-mono);
+  font-size: .44rem; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--text-dim);
+  padding: var(--sp-1) var(--sp-2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+#history-list {
+  overflow-y: auto; flex: 1;
+  padding: var(--sp-1) var(--sp-2);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(232,228,220,.12) transparent;
+  display: flex; flex-direction: column; gap: 1px;
+}
+#history-list::-webkit-scrollbar { width: 3px; }
+#history-list::-webkit-scrollbar-thumb { background: rgba(232,228,220,.15); border-radius: 2px; }
+
+.hist-row {
+  display: grid;
+  grid-template-columns: 18px 1fr 1fr;
+  gap: 2px; align-items: baseline;
+  font-family: var(--font-mono); font-size: .5rem; line-height: 1.7;
+}
+.hist-num { color: var(--text-dim); }
+.hist-w   { color: var(--text); }
+.hist-b   { color: var(--warm); }
+.hist-row.latest .hist-w,
+.hist-row.latest .hist-b { font-weight: 700; }
+
+/* Ghost-piece trail shown on AI/opponent moves */
+.ghost-piece-trail {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  animation: ghostFade 600ms ease forwards;
+}
+@keyframes ghostFade {
+  0%   { opacity: .55; }
+  100% { opacity: 0; }
+}
+
+/* History toggle button */
+#btn-history {
+  font-family: var(--font-mono);
+  font-size: .5rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: rgba(9,9,14,.8);
+  color: var(--text-dim); cursor: pointer;
+  transition: background var(--ease), border-color var(--ease), color var(--ease);
+  touch-action: manipulation;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+#btn-history:hover  { background: rgba(232,228,220,.06); border-color: var(--border-active); color: var(--text); }
+#btn-history.active { border-color: var(--accent); color: var(--accent-bright); background: rgba(74,127,165,.08); }
+
+@media (max-width: 600px) {
+  #history-panel { width: 130px; max-height: 150px; font-size: .44rem; }
+}
 
 
 /* ═══════════════════════════════════════════
@@ -716,6 +918,7 @@ body::before {
     </div>
 
     <button class="btn btn-g btn-online-ghost" id="btn-online">Online 1v1</button>
+    <button class="btn" id="btn-setup" style="border-color:rgba(200,184,162,.3);color:var(--warm)">Custom Setup</button>
 
   </div>
 </div>
@@ -730,6 +933,7 @@ body::before {
     <div class="op-title">Online Play</div>
     <div class="op-btns">
       <button class="btn btn-g" id="op-create-btn">Create Room</button>
+      <button class="btn btn-g" id="op-create-setup-btn" style="border-color:rgba(200,184,162,.4);color:var(--warm)">Create Room (Custom Setup)</button>
       <button class="btn"       id="op-join-btn"  >Join Room</button>
       <button class="btn"       id="op-back-menu" style="margin-top:4px">← Back</button>
     </div>
@@ -790,6 +994,12 @@ body::before {
 
   <div class="hud-bl">
     <button class="btn-sm" id="btn-new">← Menu</button>
+    <button class="btn-sm" id="btn-history">History</button>
+    <!-- Collapsible move history panel -->
+    <div id="history-panel">
+      <div id="history-header">Moves</div>
+      <div id="history-list"></div>
+    </div>
   </div>
 
   <div class="hud-br">
@@ -828,6 +1038,59 @@ body::before {
       <button class="pbtn" data-p="b">♝</button>
       <button class="pbtn" data-p="n">♞</button>
     </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     SETUP MODE — pre-game board editor
+════════════════════════════════════════════ -->
+<div id="setup-overlay">
+
+  <!-- Top bar -->
+  <div id="setup-bar">
+    <span id="setup-bar-label">Setup Board</span>
+    <span id="setup-status">Place pieces, then start</span>
+  </div>
+
+  <!-- Ghost cursor that follows pointer while holding a piece -->
+  <div id="setup-cursor"></div>
+
+  <!-- Bottom palette tray -->
+  <div id="setup-palette">
+
+    <div class="palette-row">
+      <span class="palette-label">White</span>
+      <button class="pchip" data-piece="k" data-color="w" title="King">♔</button>
+      <button class="pchip" data-piece="q" data-color="w" title="Queen">♕</button>
+      <button class="pchip" data-piece="r" data-color="w" title="Rook">♖</button>
+      <button class="pchip" data-piece="b" data-color="w" title="Bishop">♗</button>
+      <button class="pchip" data-piece="n" data-color="w" title="Knight">♘</button>
+      <button class="pchip" data-piece="p" data-color="w" title="Pawn">♙</button>
+    </div>
+
+    <div class="palette-row">
+      <span class="palette-label">Black</span>
+      <button class="pchip" data-piece="k" data-color="b" title="King">♚</button>
+      <button class="pchip" data-piece="q" data-color="b" title="Queen">♛</button>
+      <button class="pchip" data-piece="r" data-color="b" title="Rook">♜</button>
+      <button class="pchip" data-piece="b" data-color="b" title="Bishop">♝</button>
+      <button class="pchip" data-piece="n" data-color="b" title="Knight">♞</button>
+      <button class="pchip" data-piece="p" data-color="b" title="Pawn">♟</button>
+    </div>
+
+    <div class="palette-row" style="margin-top:2px">
+      <span class="palette-label"></span>
+      <button class="pchip erase" id="setup-erase" title="Erase">✕</button>
+      <button class="pchip" id="setup-clear-btn" title="Clear board" style="font-size:.5rem;letter-spacing:.04em;font-family:var(--font-mono);color:var(--text-dim);width:auto;padding:0 10px">Clear</button>
+      <button class="pchip" id="setup-reset-btn" title="Reset to standard" style="font-size:.5rem;letter-spacing:.04em;font-family:var(--font-mono);color:var(--text-dim);width:auto;padding:0 10px">Reset</button>
+    </div>
+
+    <div id="setup-actions">
+      <button class="btn" id="setup-cancel-btn">← Back</button>
+      <button class="btn btn-primary" id="setup-start-btn">Start Game</button>
+    </div>
+
   </div>
 </div>
 
@@ -1105,6 +1368,29 @@ class Chess {
     return moves;
   }
 
+  // Load an arbitrary board position (for custom setup mode).
+  // Resets history and EP/castling rights since they don't apply to custom positions.
+  loadPosition(bd) {
+    this.bd     = bd.map(row => row.map(p => p ? {...p} : null));
+    this.turn   = W;
+    this.ep     = null;
+    // Infer castling rights from piece positions and move counts
+    this.cr = { w:{ k:0, q:0 }, b:{ k:0, q:0 } };
+    const wk = this.bd[0][4], wkr = this.bd[0][7], wqr = this.bd[0][0];
+    const bk = this.bd[7][4], bkr = this.bd[7][7], bqr = this.bd[7][0];
+    if (wk && wk.t === PT.K && wk.c === W && !wk.m) {
+      if (wkr && wkr.t === PT.R && wkr.c === W && !wkr.m) this.cr.w.k = 1;
+      if (wqr && wqr.t === PT.R && wqr.c === W && !wqr.m) this.cr.w.q = 1;
+    }
+    if (bk && bk.t === PT.K && bk.c === B && !bk.m) {
+      if (bkr && bkr.t === PT.R && bkr.c === B && !bkr.m) this.cr.b.k = 1;
+      if (bqr && bqr.t === PT.R && bqr.c === B && !bqr.m) this.cr.b.q = 1;
+    }
+    this.hist   = [];
+    this.status = 'playing';
+    this._updateStatus();
+  }
+
   // Commit a move. This is the ONLY place that updates turn + status.
   move(fr, to, prom = 'q') {
     const legal = this.legal(fr.r, fr.f);
@@ -1146,14 +1432,22 @@ const SF_ELO   = { 1: 1200, 2: 1700, 3: 3200 };
 const SF_DEPTH = { 1: 6,    2: 10,   3: 15   };
 
 function initStockfish() {
+  // stockfish.js@10.0.2 on unpkg serves with correct CORS headers for Worker use.
+  // jsDelivr CDN blocked cross-origin Worker instantiation on some browsers/hosts.
+  const SF_URL = 'https://unpkg.com/stockfish.js@10.0.2/stockfish.js';
   try {
-    // Stockfish 16 lite — small enough to load fast
-    stockfish = new Worker('https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js');
+    stockfish = new Worker(SF_URL);
     stockfish.onmessage = e => handleStockfishMessage(e.data);
-    stockfish.onerror   = () => { stockfish = null; }; // fall back silently
+    stockfish.onerror   = err => {
+      console.warn('Stockfish Worker error — falling back to minimax:', err);
+      stockfish = null;
+      sfReady   = false;
+      updateSfTag();
+    };
     stockfish.postMessage('uci');
   } catch(e) {
-    stockfish = null; // file:// or CSP block — fallback kicks in
+    // file:// or strict CSP — minimax fallback kicks in silently
+    stockfish = null;
   }
 }
 
@@ -1192,16 +1486,12 @@ function updateSfTag() {
   }
 }
 
-// Configure Stockfish skill/elo for the chosen difficulty
+// Configure Stockfish skill for the chosen difficulty.
+// stockfish.js@10 only supports "Skill Level" (0-20).
+// UCI_LimitStrength / UCI_Elo are not supported in this build — sending them
+// causes the engine to ignore all options and play at full strength regardless.
 function configureStockfish(difficulty) {
   const skill = SF_SKILL[difficulty];
-  const elo   = SF_ELO[difficulty];
-  if (difficulty < 3) {
-    stockfish.postMessage(`setoption name UCI_LimitStrength value true`);
-    stockfish.postMessage(`setoption name UCI_Elo value ${elo}`);
-  } else {
-    stockfish.postMessage(`setoption name UCI_LimitStrength value false`);
-  }
   stockfish.postMessage(`setoption name Skill Level value ${skill}`);
 }
 
@@ -2222,9 +2512,16 @@ function createRoom() {
 
     conn.on('open', () => {
       const ts = chosenOnlineTimer;
-      conn.send({ type:'start', guestColor:B, timerSecs:ts });
+      const msg = { type:'start', guestColor:B, timerSecs:ts };
+      if (pendingCustomBoard) msg.customBoard = pendingCustomBoard;
+      conn.send(msg);
       showOnlinePanel('none');
-      startGame('online', W, 1, ts);
+      if (pendingCustomBoard) {
+        startGameWithCustomBoard('online', W, 1, ts, pendingCustomBoard);
+        pendingCustomBoard = null;
+      } else {
+        startGame('online', W, 1, ts);
+      }
       SFX.connect();
     });
   });
@@ -2271,7 +2568,12 @@ function handleNetworkData(data) {
   if (data.type === 'start') {
     onlineRole = 'guest';
     showOnlinePanel('none');
-    startGame('online', data.guestColor, 1, data.timerSecs || 0);
+    // Host may send a custom board for setup mode games
+    if (data.customBoard) {
+      startGameWithCustomBoard('online', data.guestColor, 1, data.timerSecs || 0, data.customBoard);
+    } else {
+      startGame('online', data.guestColor, 1, data.timerSecs || 0);
+    }
     SFX.connect();
   } else if (data.type === 'move') {
     doExecute(data.fr, data.to, data.prom, /* fromNet */ true);
@@ -2444,6 +2746,7 @@ function startGame(m, col, diff, timerSeconds = 0) {
   selectedRow = selectedFile = -1;
   stopKingPulse();
   stopTimerTick();
+  resetHistoryPanel();
 
   ui.landing.style.display = 'none';
   ui.hud.classList.add('on');
@@ -2513,16 +2816,27 @@ function runAi() {
 function doExecute(fr, to, prom, fromNetwork = false) {
   if (isBusy) return;
 
+  // Read the moving piece BEFORE calling chess.move() — it clears the fr square
+  const movingPiece = chess.at(fr.r, fr.f);
+  if (!movingPiece) return;
+
   const result = chess.move(fr, to, prom);
   if (!result) return;
 
   const { mv, cap, status } = result;
   const movedColor           = chess.turn === W ? B : W; // turn already flipped
 
+  // Record move in history — pass piece data we captured before the move
+  pushMoveHistory(mv, cap, status, prom, movedColor, movingPiece.t);
+
   // Relay move to opponent if we made it locally
   if (!fromNetwork && conn && mode === 'online') {
     conn.send({ type:'move', fr, to, prom });
   }
+
+  // Ghost trail: show translucent origin ghost on AI and opponent moves
+  const isOpponentMove = fromNetwork || (mode === 'ai' && movedColor !== myColor);
+  if (isOpponentMove) spawnGhostTrail(movingPiece.t, movedColor, fr.r, fr.f);
 
   // Handle captures
   if (cap) {
@@ -2686,13 +3000,415 @@ function showPromoPickerFor(color) {
 
 
 // ═══════════════════════════════════════════
+//  11b. SETUP MODE — pre-game board editor
+//
+//  Flow:
+//    1. User clicks "Custom Setup" on landing
+//    2. setupEnter() shows the 3D board + palette tray
+//    3. User taps a piece chip to "hold" it
+//    4. User taps a board square to place/erase
+//    5. setupStart() validates (1 king each) → startGame with custom board
+//
+//  Multiplayer: host sends { type:'start', customBoard } so guest
+//  loads the same position before startGame fires.
+// ═══════════════════════════════════════════
+
+// The board being edited (8x8 array, same format as chess.bd)
+let setupBoard   = null;
+let setupHeld    = null; // { t, c } piece being held, or null
+let setupErasing = false;
+let inSetupMode  = false;
+
+// Pending setup config for when the game starts
+let pendingSetupMode    = null;  // 'ai' | 'online'
+let pendingSetupColor   = W;
+let pendingSetupDiff    = 1;
+let pendingSetupTimer   = 0;
+let pendingCustomBoard  = null;  // set by host, read by guest
+
+const PIECE_SYMBOLS = {
+  w: { k:'♔', q:'♕', r:'♖', b:'♗', n:'♘', p:'♙' },
+  b: { k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟' },
+};
+
+function setupEnter(gameMode, col, diff, timerSecs) {
+  inSetupMode        = true;
+  pendingSetupMode   = gameMode;
+  pendingSetupColor  = col;
+  pendingSetupDiff   = diff;
+  pendingSetupTimer  = timerSecs;
+  setupHeld          = null;
+  setupErasing       = false;
+
+  // Start from the standard chess position
+  const tempChess = new Chess();
+  setupBoard = tempChess.bd.map(row => row.map(p => p ? {...p} : null));
+
+  // Show the board without the HUD
+  ui.landing.style.display = 'none';
+  ui.hud.classList.remove('on');
+  ui.go.classList.remove('on');
+
+  // Render the board in 3D
+  const tempCh = new Chess();
+  tempCh.bd    = setupBoard;
+  syncBoardToScene(tempCh);
+  orientAllKnights();
+
+  // Face board toward chosen side
+  camera.position.set(0, 10, col === B ? -9.5 : 9.5);
+  controls.target.set(0, 0, 0);
+  controls.update();
+
+  document.getElementById('setup-overlay').classList.add('on');
+  updateSetupCursor();
+  updateSetupStatus();
+}
+
+function setupExit() {
+  inSetupMode  = false;
+  setupHeld    = null;
+  setupErasing = false;
+  setupBoard   = null;
+  document.getElementById('setup-overlay').classList.remove('on');
+  document.getElementById('setup-cursor').style.display = 'none';
+  // Deactivate all chips
+  document.querySelectorAll('.pchip').forEach(c => c.classList.remove('active'));
+  document.getElementById('setup-erase').classList.remove('active');
+  // Return to landing
+  ui.landing.style.display = 'flex';
+  syncBoardToScene(chess); // restore default board display
+}
+
+// Tap a square during setup — place, erase, or pick up
+function handleSetupClick(r, f) {
+  if (setupErasing) {
+    // Erase whatever is on this square
+    if (setupBoard[r][f]) {
+      setupBoard[r][f] = null;
+      despawnPiece(r, f);
+    }
+    updateSetupStatus();
+    return;
+  }
+  if (setupHeld) {
+    // Place the held piece. If same piece already there, treat as deselect toggle.
+    const existing = setupBoard[r][f];
+    if (existing && existing.t === setupHeld.t && existing.c === setupHeld.c) {
+      // Clicking the same type on same square — remove it
+      setupBoard[r][f] = null;
+      despawnPiece(r, f);
+    } else {
+      // Replace whatever is there
+      if (existing) despawnPiece(r, f);
+      setupBoard[r][f] = { t: setupHeld.t, c: setupHeld.c, m: 0 };
+      spawnPiece(setupHeld.t, setupHeld.c, r, f);
+    }
+    updateSetupStatus();
+    SFX.select();
+    return;
+  }
+  // Nothing held — pick up the piece to move it
+  const pc = setupBoard[r][f];
+  if (pc) {
+    setupHeld    = { t: pc.t, c: pc.c };
+    setupErasing = false;
+    updateSetupCursor();
+    updatePaletteActiveState();
+    SFX.select();
+  }
+}
+
+// Track pointer for ghost cursor
+document.addEventListener('mousemove', e => {
+  const cur = document.getElementById('setup-cursor');
+  if (!inSetupMode || !cur) return;
+  cur.style.left = e.clientX + 'px';
+  cur.style.top  = e.clientY + 'px';
+});
+
+function updateSetupCursor() {
+  const cur = document.getElementById('setup-cursor');
+  if (!cur) return;
+  if (setupHeld && !setupErasing) {
+    cur.textContent  = PIECE_SYMBOLS[setupHeld.c][setupHeld.t];
+    cur.style.display = 'block';
+  } else {
+    cur.style.display = 'none';
+  }
+}
+
+function updatePaletteActiveState() {
+  document.querySelectorAll('.pchip[data-piece]').forEach(chip => {
+    const matches = setupHeld
+      && chip.dataset.piece === setupHeld.t
+      && chip.dataset.color === setupHeld.c;
+    chip.classList.toggle('active', !!matches);
+  });
+  document.getElementById('setup-erase').classList.toggle('active', setupErasing);
+}
+
+function updateSetupStatus() {
+  const stat  = document.getElementById('setup-status');
+  const wKings = countPieces(setupBoard, PT.K, W);
+  const bKings = countPieces(setupBoard, PT.K, B);
+  if (wKings === 0 && bKings === 0) {
+    stat.textContent = 'Need both kings to start';
+    stat.className   = 'err';
+  } else if (wKings === 0) {
+    stat.textContent = 'Missing white king';
+    stat.className   = 'err';
+  } else if (bKings === 0) {
+    stat.textContent = 'Missing black king';
+    stat.className   = 'err';
+  } else if (wKings > 1 || bKings > 1) {
+    stat.textContent = 'Only one king per side';
+    stat.className   = 'err';
+  } else {
+    const total = setupBoard.flat().filter(Boolean).length;
+    stat.textContent = `${total} piece${total !== 1 ? 's' : ''} placed`;
+    stat.className   = 'ok';
+  }
+}
+
+function countPieces(bd, type, color) {
+  let n = 0;
+  for (let r = 0; r < 8; r++)
+    for (let f = 0; f < 8; f++) {
+      const p = bd[r][f];
+      if (p && p.t === type && p.c === color) n++;
+    }
+  return n;
+}
+
+function setupValidate() {
+  return countPieces(setupBoard, PT.K, W) === 1
+      && countPieces(setupBoard, PT.K, B) === 1;
+}
+
+// Start game from current setup board
+function setupStart() {
+  if (!setupValidate()) {
+    SFX.error();
+    const stat = document.getElementById('setup-status');
+    stat.className = 'err';
+    // Shake the status text
+    stat.style.animation = 'none';
+    void stat.offsetWidth;
+    stat.style.animation = '';
+    return;
+  }
+  SFX.btnStart();
+  const bd = setupBoard.map(row => row.map(p => p ? {...p} : null));
+  document.getElementById('setup-overlay').classList.remove('on');
+  inSetupMode = false;
+
+  if (pendingSetupMode === 'online') {
+    // For online: go to the room creation flow, carrying the board
+    pendingCustomBoard = bd;
+    showOnlineSetupPanel(bd);
+  } else {
+    // AI or local: load position directly
+    startGameWithCustomBoard(pendingSetupMode, pendingSetupColor, pendingSetupDiff, pendingSetupTimer, bd);
+  }
+}
+
+// Start game with a custom board loaded into the engine
+function startGameWithCustomBoard(m, col, diff, timerSecs, bd) {
+  mode    = m;
+  myColor = col;
+  aiDiff  = diff || 1;
+
+  chess.loadPosition(bd);
+  syncBoardToScene(chess, /* rain */ true);
+  setTimeout(orientAllKnights, 800);
+
+  clearHighlights();
+  removeSelectionRing();
+  selSq = null; legalMoveCache = []; lastFr = lastTo = null;
+  isBusy = false; isAiThinking = false;
+  captureLog = { w:[], b:[] };
+  selectedRow = selectedFile = -1;
+  stopKingPulse(); stopTimerTick();
+  resetHistoryPanel();
+
+  ui.landing.style.display = 'none';
+  ui.hud.classList.add('on');
+  ui.go.classList.remove('on');
+  ui.statusTxt.classList.remove('on');
+  ui.selLabel.textContent = '';
+
+  ui.modeTag.textContent = m === 'online' ? 'CUSTOM ONLINE' : 'CUSTOM VS AI';
+
+  camera.position.set(0, 10, col === B ? -9.5 : 9.5);
+  controls.target.set(0, 0, 0); controls.update();
+
+  initTimer(timerSecs); startTimerTick();
+  refreshHUD(); updateSfTag();
+
+  if (m === 'ai' && chess.turn !== myColor) setTimeout(runAi, 1200);
+}
+
+// Online setup: show a waiting panel that carries the custom board
+function showOnlineSetupPanel(bd) {
+  // Re-use the standard online create flow; board gets sent in the start message
+  // Store it so createRoom() can pick it up
+  pendingCustomBoard = bd;
+  showOnlinePanel('menu');
+  ui.landing.style.display = 'none';
+}
+
+
+// ═══════════════════════════════════════════
+//  11c. MOVE HISTORY — algebraic notation log
+//
+//  Generates standard short algebraic notation (SAN-lite).
+//  Pairs moves into rows (white + black per turn number).
+//  Works for both local and multiplayer — doExecute calls
+//  pushMoveHistory() after every committed move regardless of source.
+// ═══════════════════════════════════════════
+
+let moveHistory     = [];   // flat list of notation strings
+let historyVisible  = false;
+
+const FILE_NAMES = ['a','b','c','d','e','f','g','h'];
+const PIECE_SAN  = { p:'', r:'R', n:'N', b:'B', q:'Q', k:'K' };
+
+// Build readable short algebraic notation for a move.
+// pieceType is the type of the piece that moved (read before chess.move() clears the square).
+// Called AFTER chess.move() so status reflects the resulting position.
+function buildNotation(mv, cap, status, prom, pieceType) {
+  const { fr, to, sp } = mv;
+
+  if (sp === 'cK') return 'O-O';
+  if (sp === 'cQ') return 'O-O-O';
+
+  const piece    = PIECE_SAN[pieceType] ?? '';
+  const toFile   = FILE_NAMES[to.f];
+  const toRank   = to.r + 1;
+  const capture  = (cap || sp === 'ep') ? 'x' : '';
+  // Pawns include origin file on captures
+  const fromHint = (!piece && capture) ? FILE_NAMES[fr.f] : '';
+  const promSuf  = sp === 'prom' ? `=${(prom || 'q').toUpperCase()}` : '';
+  const checkSuf = status === 'checkmate' ? '#' : status === 'check' ? '+' : '';
+
+  return `${piece}${fromHint}${capture}${toFile}${toRank}${promSuf}${checkSuf}`;
+}
+
+function pushMoveHistory(mv, cap, status, prom, movedColor, pieceType) {
+  const notation = buildNotation(mv, cap, status, prom, pieceType);
+  moveHistory.push({ notation, color: movedColor });
+  renderMoveHistory();
+}
+
+function clearMoveHistory() {
+  moveHistory = [];
+  const list = document.getElementById('history-list');
+  if (list) list.innerHTML = '';
+}
+
+function renderMoveHistory() {
+  const list = document.getElementById('history-list');
+  if (!list) return;
+
+  // Build rows: pair white + black moves together
+  const rows = [];
+  for (let i = 0; i < moveHistory.length; i += 2) {
+    rows.push({
+      num:   Math.floor(i / 2) + 1,
+      white: moveHistory[i]?.notation   || '',
+      black: moveHistory[i+1]?.notation || '',
+    });
+  }
+
+  list.innerHTML = rows.map((row, idx) => {
+    const isLatest = idx === rows.length - 1;
+    return `<div class="hist-row${isLatest ? ' latest' : ''}">
+      <span class="hist-num">${row.num}.</span>
+      <span class="hist-w">${row.white}</span>
+      <span class="hist-b">${row.black}</span>
+    </div>`;
+  }).join('');
+
+  // Auto-scroll to bottom
+  list.scrollTop = list.scrollHeight;
+}
+
+function toggleHistoryPanel() {
+  historyVisible = !historyVisible;
+  document.getElementById('history-panel').classList.toggle('open', historyVisible);
+  document.getElementById('btn-history').classList.toggle('active', historyVisible);
+}
+
+function resetHistoryPanel() {
+  historyVisible = false;
+  document.getElementById('history-panel').classList.remove('open');
+  document.getElementById('btn-history').classList.remove('active');
+  clearMoveHistory();
+}
+
+
+// ═══════════════════════════════════════════
+//  11d. GHOST PIECE TRAIL — AI/opponent move preview
+//
+//  When an opponent or AI move happens, we spawn a
+//  semi-transparent copy of the piece at the origin square
+//  and fade it out over 600ms. Gives players a clear visual
+//  of where the piece came from — especially useful for AI.
+//
+//  Only fires on non-player moves (fromNetwork=true or AI).
+//  Does NOT fire on the local player's own moves.
+// ═══════════════════════════════════════════
+
+function spawnGhostTrail(type, color, r, f) {
+  // Build a ghost group — same geometry, transparent material
+  const isWhite = color === W;
+  const ghostMat = new THREE.MeshStandardMaterial({
+    color:     isWhite ? 0xeee8ff : 0x8844aa,
+    roughness: .9,
+    metalness: 0,
+    transparent: true,
+    opacity: .45,
+    depthWrite: false,
+  });
+
+  // Re-use buildPieceMesh then override materials
+  const group = buildPieceMesh(type, color);
+  group.traverse(m => {
+    if (m.isMesh && !m.userData.isOutline) {
+      m.material   = ghostMat;
+      m.castShadow = false;
+    } else if (m.isMesh && m.userData.isOutline) {
+      m.visible = false; // hide outline and fresnel on ghost
+    }
+  });
+
+  const { x, z } = boardToWorld(r, f);
+  group.position.set(x, 0, z);
+  scene.add(group);
+
+  // Fade out over 600ms then remove
+  const start = performance.now();
+  const dur   = 600;
+  (function fade() {
+    const t = Math.min(1, (performance.now() - start) / dur);
+    ghostMat.opacity = .45 * (1 - t);
+    if (t < 1) requestAnimationFrame(fade);
+    else scene.remove(group);
+  })();
+}
+
+
+// ═══════════════════════════════════════════
 //  12. EVENT LISTENERS
 // ═══════════════════════════════════════════
 
 // Board input — desktop click
 canvas.addEventListener('click', e => {
   const sq = getSquareFromPointer(e);
-  if (sq) handleSquareClick(sq.r, sq.f);
+  if (!sq) return;
+  if (inSetupMode) handleSetupClick(sq.r, sq.f);
+  else handleSquareClick(sq.r, sq.f);
 });
 
 // Board input — mobile tap (ignore if finger drifted > 8px = pan gesture)
@@ -2711,7 +3427,9 @@ canvas.addEventListener('touchend', e => {
   if (drift > 8) return; // was a pan, not a tap
   e.preventDefault(); // block synthetic click
   const sq = getSquareFromPointer(t);
-  if (sq) handleSquareClick(sq.r, sq.f);
+  if (!sq) return;
+  if (inSetupMode) handleSetupClick(sq.r, sq.f);
+  else handleSquareClick(sq.r, sq.f);
 }, { passive: false });
 
 // AI difficulty buttons
@@ -2763,12 +3481,31 @@ document.getElementById('btn-ai').addEventListener('click', () => {
 
 document.getElementById('btn-online').addEventListener('click', () => {
   SFX.btnOnline();
+  pendingCustomBoard = null; // clear any leftover custom board
   showOnlinePanel('menu');
+});
+
+// Custom Setup button
+document.getElementById('btn-setup').addEventListener('click', () => {
+  SFX.btnClick();
+  // Show setup config inline — reuse AI expand row logic to pick side/diff/timer
+  // then enter setup with those settings
+  let col  = W;
+  const secs = chosenTimer === -1
+    ? ((parseInt(document.getElementById('custom-mins').value) || 5) * 60)
+    : chosenTimer;
+  setupEnter('ai', col, chosenDiff, secs);
 });
 
 // Online overlay buttons
 document.getElementById('op-back-menu')  .addEventListener('click', () => { SFX.btnBack();   showOnlinePanel('none'); });
-document.getElementById('op-create-btn') .addEventListener('click', () => { SFX.btnOnline(); createRoom(); });
+document.getElementById('op-create-btn') .addEventListener('click', () => { SFX.btnOnline(); pendingCustomBoard = null; createRoom(); });
+document.getElementById('op-create-setup-btn').addEventListener('click', () => {
+  // Enter board setup, then when user hits Start it will create the room
+  SFX.btnOnline();
+  showOnlinePanel('none');
+  setupEnter('online', W, chosenDiff, chosenOnlineTimer);
+});
 document.getElementById('op-join-btn')   .addEventListener('click', () => {
   SFX.btnClick();
   document.getElementById('op-code-input').value = '';
@@ -2801,6 +3538,77 @@ document.getElementById('op-code').addEventListener('click', () => {
 document.getElementById('op-cancel-wait').addEventListener('click', () => { SFX.btnBack(); closePeer(); showOnlinePanel('none'); });
 document.getElementById('op-cancel-join').addEventListener('click', () => { SFX.btnBack(); showOnlinePanel('menu'); });
 
+// ── Setup Mode buttons ───────────────────────────────────
+// Piece palette chips
+document.querySelectorAll('.pchip[data-piece]').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const t = chip.dataset.piece;
+    const c = chip.dataset.color;
+    if (setupHeld && setupHeld.t === t && setupHeld.c === c) {
+      // Tap same chip again = deselect
+      setupHeld    = null;
+      setupErasing = false;
+    } else {
+      setupHeld    = { t, c };
+      setupErasing = false;
+    }
+    updateSetupCursor();
+    updatePaletteActiveState();
+    SFX.toggle();
+  });
+});
+
+// Erase chip
+document.getElementById('setup-erase').addEventListener('click', () => {
+  setupErasing = !setupErasing;
+  if (setupErasing) setupHeld = null;
+  updateSetupCursor();
+  updatePaletteActiveState();
+  SFX.toggle();
+});
+
+// Clear board
+document.getElementById('setup-clear-btn').addEventListener('click', () => {
+  SFX.btnBack();
+  for (let r = 0; r < 8; r++)
+    for (let f = 0; f < 8; f++) {
+      if (setupBoard[r][f]) { despawnPiece(r, f); setupBoard[r][f] = null; }
+    }
+  updateSetupStatus();
+});
+
+// Reset to standard position
+document.getElementById('setup-reset-btn').addEventListener('click', () => {
+  SFX.btnClick();
+  for (let r = 0; r < 8; r++)
+    for (let f = 0; f < 8; f++) {
+      if (setupBoard[r][f]) despawnPiece(r, f);
+    }
+  const tempChess = new Chess();
+  setupBoard = tempChess.bd.map(row => row.map(p => p ? {...p} : null));
+  const tempCh = new Chess(); tempCh.bd = setupBoard;
+  syncBoardToScene(tempCh);
+  orientAllKnights();
+  updateSetupStatus();
+});
+
+// Cancel setup
+document.getElementById('setup-cancel-btn').addEventListener('click', () => {
+  SFX.btnBack();
+  setupExit();
+});
+
+// Start game from setup
+document.getElementById('setup-start-btn').addEventListener('click', () => {
+  setupStart();
+});
+
+// History toggle
+document.getElementById('btn-history').addEventListener('click', () => {
+  toggleHistoryPanel();
+  SFX.toggle();
+});
+
 // In-game HUD buttons
 document.getElementById('btn-new').addEventListener('click', () => {
   SFX.btnBack();
@@ -2819,6 +3627,11 @@ document.getElementById('btn-again').addEventListener('click', () => {
     ui.landing.style.display = 'flex';
     ui.hud.classList.remove('on');
     ui.go.classList.remove('on');
+  } else if (ui.modeTag.textContent.startsWith('CUSTOM')) {
+    // Re-enter setup with the same config so they can tweak or replay
+    ui.go.classList.remove('on');
+    ui.hud.classList.remove('on');
+    setupEnter(mode, myColor, aiDiff, timerTotal);
   } else {
     startGame(mode, myColor, aiDiff, timerTotal);
   }
@@ -2844,7 +3657,7 @@ ui.promo.querySelectorAll('.pbtn').forEach(btn => btn.addEventListener('click', 
 }));
 
 // Hover sounds on all interactive elements
-document.querySelectorAll('.btn, .btn-sm, .obtn, .pbtn, .tc, .tc-online, [data-c], [data-d]').forEach(el => {
+document.querySelectorAll('.btn, .btn-sm, .obtn, .pbtn, .pchip, .tc, .tc-online, [data-c], [data-d]').forEach(el => {
   el.addEventListener('mouseenter', () => SFX.hover());
 });
 
