@@ -1,0 +1,190 @@
+/* ── Landing screen, menu, buttons, expand-rows ────────────────── */
+   LANDING SCREEN — editorial dark
+   Hierarchy: wordmark → tagline → actions.
+   No sparkles, no pixel art, no gradients.
+═══════════════════════════════════════════ */
+#landing {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 100;
+  background: #09090e; /* solid fallback if CSS vars not loaded */
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(74,127,165,0.10) 0%, transparent 70%),
+    var(--bg, #09090e);
+  padding: var(--sp-4, 1.5rem);
+  gap: var(--sp-6, 3rem);
+}
+
+/* ── Wordmark block ── */
+.brand {
+  text-align: center;
+  animation: fadeUp 220ms ease both;
+}
+
+/* "CHESS" — massive Syne display type. No pixel art. */
+.brand-title {
+  font-family: var(--font-display);
+  font-size: clamp(4rem, 14vw, 9rem);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1;
+  color: var(--text);
+  /* Thin horizontal rule above — gives editorial weight */
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border-active);
+}
+
+/* "ARCADE" — small mono subtitle. Contrasts display above. */
+.brand-sub {
+  font-family: var(--font-mono);
+  font-size: clamp(.55rem, 1.4vw, .7rem);
+  font-weight: 400;
+  letter-spacing: .42em;
+  text-transform: uppercase;
+  color: var(--warm);
+  margin-top: var(--sp-2);
+  /* Thin rule below — bookends the wordmark block */
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Menu container ── */
+.menu {
+  display: flex; flex-direction: column;
+  gap: var(--sp-2); align-items: stretch;
+  width: min(280px, 86vw);
+  animation: fadeUp 220ms 80ms ease both;
+}
+
+/* ── PRIMARY BUTTON — filled, single dominant action ──
+   Only .btn-primary gets filled. Everything else is ghost.
+   This is the hierarchy: one thing stands out, rest recede.
+──────────────────────────────────────────────────────── */
+.btn {
+  font-family: var(--font-mono);
+  font-size: .65rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  width: 100%;
+  padding: 13px var(--sp-4);
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-active);
+  background: transparent;
+  color: var(--text);
+  transition:
+    background var(--ease),
+    border-color var(--ease),
+    color var(--ease),
+    transform var(--ease);
+  touch-action: manipulation;
+  user-select: none;
+  line-height: 1.5;
+  text-align: center;
+}
+.btn:hover {
+  background: rgba(232,228,220,0.06);
+  border-color: rgba(232,228,220,.45);
+}
+.btn:active { transform: translateY(1px); }
+
+/* Primary: VS AI — filled with accent */
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  letter-spacing: .1em;
+}
+.btn-primary:hover {
+  background: var(--accent-bright);
+  border-color: var(--accent-bright);
+}
+
+/* Online: ghost with accent tint */
+.btn-online-ghost {
+  border-color: rgba(74,127,165,.45);
+  color: var(--accent-bright);
+}
+.btn-online-ghost:hover {
+  background: rgba(74,127,165,.08);
+  border-color: var(--accent);
+}
+
+/* Keep .btn-o and .btn-g aliases pointing to new intent */
+.btn-o { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-o:hover { background: var(--accent-bright); border-color: var(--accent-bright); }
+.btn-g { border-color: rgba(74,127,165,.45); color: var(--accent-bright); }
+.btn-g:hover { background: rgba(74,127,165,.08); border-color: var(--accent); }
+
+/* ── Expand panel ── */
+.expand-row {
+  display: none; flex-direction: column;
+  align-items: stretch; gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--r-md) var(--r-md);
+  background: var(--surface);
+  width: 100%;
+}
+.expand-row.open { display: flex; }
+
+.row-label {
+  font-family: var(--font-mono);
+  font-size: .5rem;
+  letter-spacing: .28em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-top: var(--sp-1);
+}
+
+.opt-row { display: flex; gap: var(--sp-1); width: 100%; }
+
+/* Option toggle chips */
+.obtn {
+  font-family: var(--font-mono);
+  font-size: .54rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: var(--sp-2) var(--sp-1);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  flex: 1; text-align: center; cursor: pointer;
+  transition: background var(--ease), border-color var(--ease), color var(--ease);
+  touch-action: manipulation;
+}
+.obtn:hover  { background: rgba(232,228,220,.04); color: var(--text); }
+/* All active states use accent — consistent, not rainbow */
+.obtn.active    { border-color: var(--accent-bright); color: var(--accent-bright); background: rgba(74,127,165,.10); }
+.obtn.de.active { border-color: var(--ok);            color: var(--ok);            background: rgba(74,154,122,.08); }
+.obtn.dm.active { border-color: var(--warm);          color: var(--warm);          background: rgba(200,184,162,.08); }
+.obtn.dh.active { border-color: var(--danger);        color: var(--danger);        background: rgba(192,68,76,.08); }
+
+/* Custom time input */
+#custom-time-row { display: none; align-items: center; gap: var(--sp-2); margin-top: var(--sp-1); }
+#custom-time-row.visible { display: flex; }
+
+.time-input {
+  font-family: var(--font-mono);
+  font-size: .8rem;
+  font-weight: 700;
+  width: 64px; padding: var(--sp-1) var(--sp-2);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  text-align: center; outline: none;
+  transition: border-color var(--ease), box-shadow var(--ease);
+}
+.time-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(74,127,165,.15);
+}
+
+
+/* ═══════════════════════════════════════════

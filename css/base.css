@@ -1,0 +1,86 @@
+/* ── CSS variables, reset, typography ─────────────────────────── */
+/* ─────────────────────────────────────────────
+   DESIGN TOKENS — Lionel-Coded Dark System
+   Revised: warm editorial dark. No purple, no gold.
+   Accent: deep steel blue. Text: warm off-white.
+───────────────────────────────────────────── */
+:root {
+  /* Palette — grounded, editorial */
+  --bg:            #09090e;
+  --surface:       #111118;
+  --surface-2:     #18181f;
+  --accent:        #4a7fa5;        /* steel blue — calm authority */
+  --accent-dim:    rgba(74,127,165,0.25);
+  --accent-bright: #6fa3c8;
+  --warm:          #c8b8a2;        /* warm tan — secondary text/labels */
+  --text:          #e8e4dc;        /* warm off-white — readable, not harsh */
+  --text-dim:      #5a5860;
+  --danger:        #c0444c;
+  --ok:            #4a9a7a;
+  --border:        rgba(232,228,220,0.08);
+  --border-active: rgba(232,228,220,0.22);
+
+  /* Typography */
+  --font-ui:      "DM Sans",       sans-serif;
+  --font-mono:    "IBM Plex Mono", monospace;
+  --font-display: "Syne",          sans-serif;
+
+  /* 4px spacing grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+
+  /* Shape */
+  --r-sm: 3px;
+  --r-md: 5px;
+
+  /* Motion */
+  --ease: 110ms ease;
+}
+
+/* ── Reset ── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  overflow: hidden;
+  height: 100dvh;
+  width: 100vw;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 3D canvas sits below all UI */
+canvas {
+  position: fixed;
+  top: 0; left: 0;
+  z-index: 1;
+  touch-action: none;
+}
+
+/* Subtle scanlines */
+body::after {
+  content: "";
+  position: fixed; inset: 0;
+  z-index: 2; pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0px, transparent 3px,
+    rgba(0,0,0,.04) 3px, rgba(0,0,0,.04) 4px
+  );
+}
+
+/* Vignette edges */
+body::before {
+  content: "";
+  position: fixed; inset: 0;
+  z-index: 2; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,.65) 100%);
+}
+
+
+/* ═══════════════════════════════════════════
