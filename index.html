@@ -502,32 +502,29 @@ body::before {
   align-items: center; justify-content: center;
   z-index: 300;
   background: rgba(9,9,14,.90);
-  padding: var(--sp-4);
 }
 #gameover.on { display: flex; }
 
 .go-box {
   display: flex; flex-direction: column; align-items: center;
   text-align: center;
-  padding: var(--sp-6) clamp(var(--sp-5), 5vw, 56px);
+  padding: var(--sp-6);
   background: var(--surface);
   border: 1px solid var(--border-active);
   border-radius: var(--r-md);
   box-shadow: 0 8px 48px rgba(0,0,0,.6);
   animation: fadeUp 180ms ease both;
-  width: min(90vw, 400px);
-  /* Force the box into its own stacking context so HUD transforms don't affect it */
+  width: min(88vw, 360px);
   isolation: isolate;
-  transform: none;
 }
 
 .go-title {
   font-family: var(--font-display);
-  font-size: clamp(1.6rem, 5vw, 2.2rem);
+  font-size: clamp(1.8rem, 6vw, 2.4rem);
   font-weight: 800;
   color: var(--text); letter-spacing: .06em;
-  margin-bottom: var(--sp-1);
-  width: 100%; text-align: center;
+  margin-bottom: var(--sp-2);
+  text-align: center; width: 100%;
 }
 
 .go-sub {
@@ -536,18 +533,15 @@ body::before {
   color: var(--text-dim);
   margin-bottom: var(--sp-5);
   text-transform: uppercase; line-height: 2;
-  width: 100%; text-align: center;
+  text-align: center; width: 100%;
 }
 
 .go-btns {
   display: flex; flex-direction: column; gap: var(--sp-2);
   width: 100%;
 }
-.go-btns .btn {
-  width: 100%;
-  min-width: unset;
-  text-align: center;
-}
+.go-btns .btn { width: 100%; min-width: unset; text-align: center; }
+
 
 
 /* ═══════════════════════════════════════════
@@ -994,10 +988,17 @@ body::before {
 
   <div class="menu" id="main-menu">
 
-    <button class="btn btn-o btn-primary" id="btn-ai">Play vs AI</button>
+    <!-- ── Play vs AI ── -->
+    <button class="btn btn-primary" id="btn-ai">Play vs AI</button>
     <div class="expand-row" id="row-ai">
 
-      <div class="row-label">Difficulty</div>
+      <div class="row-label">Engine</div>
+      <div class="opt-row">
+        <button class="obtn active" id="btn-engine-sf"  data-engine="sf">Stockfish</button>
+        <button class="obtn"        id="btn-engine-mm"  data-engine="mm">Minimax</button>
+      </div>
+
+      <div class="row-label" style="margin-top:4px">Difficulty</div>
       <div class="opt-row">
         <button class="obtn de active" data-d="1">Easy</button>
         <button class="obtn dm"        data-d="2">Med</button>
@@ -1026,38 +1027,45 @@ body::before {
       </div>
 
       <div style="margin-top:var(--sp-2);width:100%">
-        <button class="btn" id="btn-setup-ai" style="border-color:rgba(200,184,162,.3);color:var(--warm);width:100%;padding:9px var(--sp-3)">Custom Setup →</button>
+        <button class="btn" id="btn-setup-ai" style="border-color:rgba(200,184,162,.3);color:var(--warm);padding:9px var(--sp-3)">Custom Setup →</button>
       </div>
 
     </div>
 
-    <button class="btn btn-g btn-online-ghost" id="btn-online">Online 1v1</button>
+    <!-- ── Online 1v1 ── -->
+    <button class="btn btn-g" id="btn-online">Online 1v1</button>
+    <div class="expand-row" id="row-online">
+
+      <button class="btn" id="op-create-btn" style="margin:0">Create Room</button>
+      <button class="btn" id="op-create-setup-btn" style="margin:0;border-color:rgba(200,184,162,.35);color:var(--warm)">Create Room — Custom Setup</button>
+      <button class="btn" id="op-join-btn"  style="margin:0">Join Room</button>
+
+      <div class="row-label" style="margin-top:4px">Clock</div>
+      <div class="opt-row">
+        <button class="obtn active tc-online" data-t="0">Off</button>
+        <button class="obtn        tc-online" data-t="300">5m</button>
+        <button class="obtn        tc-online" data-t="600">10m</button>
+        <button class="obtn        tc-online" data-t="900">15m</button>
+      </div>
+
+    </div>
 
   </div>
+
 </div>
 
 
 <!-- ════════════════════════════════════════════
-     ONLINE OVERLAY
+     ONLINE OVERLAY — waiting + joining panels only
+     (menu options now live in landing expand-row)
 ════════════════════════════════════════════ -->
 <div id="online-overlay">
-
-  <div id="op-menu" class="op-box">
-    <div class="op-title">Online 1v1</div>
-    <div class="op-btns">
-      <button class="btn btn-g" id="op-create-btn">Create Room</button>
-      <button class="btn" id="op-create-setup-btn" style="border-color:rgba(200,184,162,.35);color:var(--warm)">Create Room — Custom Setup</button>
-      <button class="btn" id="op-join-btn">Join Room</button>
-      <button class="btn" id="op-back-menu" style="margin-top:4px">← Back</button>
-    </div>
-  </div>
 
   <div id="op-waiting" class="op-box" style="display:none">
     <div class="op-title">Room Code</div>
     <div class="op-hint">Share this with your opponent</div>
     <div class="room-code" id="op-code" title="Tap to copy code">????</div>
     <div class="op-status" id="op-wait-status"><span class="spinner">↻</span> Waiting...</div>
-    <!-- Invite link — tap to copy the full join URL -->
     <div class="invite-link-row">
       <div class="invite-link-display" id="op-invite-url">—</div>
       <button class="btn-copy-link" id="op-copy-link">⎘ Copy Link</button>
@@ -1544,31 +1552,49 @@ class Chess {
 let stockfish     = null;
 let sfReady       = false;
 let sfCallback    = null; // resolved when bestmove arrives
+let useStockfish  = true; // toggled by engine buttons in AI expand-row
 
 const SF_SKILL = { 1: 3, 2: 10, 3: 20 };
 const SF_ELO   = { 1: 1200, 2: 1700, 3: 3200 };
 const SF_DEPTH = { 1: 6,    2: 10,   3: 15   };
 
 function initStockfish() {
-  // Try loading Stockfish as a cross-origin Worker from unpkg.
-  // If the browser blocks it (CSP, file://, or COEP policy), we fall back to minimax.
+  // GitHub Pages (and any COEP-enforcing origin) blocks `new Worker(remoteUrl)` directly.
+  // Fix: fetch the script text, wrap it in a Blob, construct Worker from blob: URL.
+  // The blob: URL is same-origin, so no CSP or COEP policy applies.
   const SF_URL = 'https://unpkg.com/stockfish.js@10.0.2/stockfish.js';
-  try {
-    stockfish = new Worker(SF_URL);
-    stockfish.onmessage = e => handleStockfishMessage(e.data);
-    stockfish.onerror = err => {
-      console.warn('[Chess Arcade] Stockfish Worker failed to load. Reason:', err.message || err);
+
+  fetch(SF_URL)
+    .then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.blob();
+    })
+    .then(blob => {
+      const blobUrl = URL.createObjectURL(blob);
+      try {
+        stockfish = new Worker(blobUrl);
+        stockfish.onmessage = e => handleStockfishMessage(e.data);
+        stockfish.onerror   = err => {
+          console.warn('[Chess Arcade] Stockfish Worker error:', err.message || err);
+          stockfish = null; sfReady = false;
+          URL.revokeObjectURL(blobUrl);
+          updateSfTag();
+        };
+        stockfish.postMessage('uci');
+        console.info('[Chess Arcade] Stockfish Worker created via blob URL, waiting for uciok...');
+        // Revoke blob URL after Worker has loaded — no longer needed
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+      } catch(e) {
+        console.warn('[Chess Arcade] Worker() constructor failed even with blob URL:', e.message);
+        URL.revokeObjectURL(blobUrl);
+        stockfish = null;
+      }
+    })
+    .catch(err => {
+      console.warn('[Chess Arcade] Failed to fetch Stockfish script:', err.message);
       console.info('[Chess Arcade] Falling back to built-in minimax.');
       stockfish = null;
-      sfReady   = false;
-      updateSfTag();
-    };
-    stockfish.postMessage('uci');
-    console.info('[Chess Arcade] Stockfish Worker created, waiting for uciok...');
-  } catch(e) {
-    console.warn('[Chess Arcade] Worker() constructor failed (likely file:// or strict CSP):', e.message);
-    stockfish = null;
-  }
+    });
 }
 
 function handleStockfishMessage(line) {
@@ -1601,10 +1627,14 @@ function updateSfTag() {
   if (!tag) return;
   if (mode !== 'ai') { tag.style.display = 'none'; return; }
   tag.style.display = '';
-  if (stockfish && sfReady) {
+  if (useStockfish && stockfish && sfReady) {
     tag.textContent = '● STOCKFISH';
     tag.className   = 'info-tag sf-on';
+  } else if (!useStockfish) {
+    tag.textContent = '● MINIMAX';
+    tag.className   = 'info-tag sf-off';
   } else {
+    // Stockfish selected but not ready yet / failed
     tag.textContent = '● MINIMAX';
     tag.className   = 'info-tag sf-off';
   }
@@ -1689,10 +1719,9 @@ function uciMoveToInternal(uciMove) {
 // Tries Stockfish first; falls back to minimax if unavailable.
 function pickAiMove(liveChess, difficulty) {
   return new Promise(resolve => {
-    if (stockfish && sfReady) {
+    if (useStockfish && stockfish && sfReady) {
       pickAiMoveStockfish(liveChess, difficulty, resolve);
     } else {
-      // Fallback: synchronous minimax (keeps game working on file://)
       resolve(pickAiMoveMinimax(liveChess, difficulty));
     }
   });
@@ -2719,13 +2748,18 @@ function handleDisconnect() {
 }
 
 function showOnlinePanel(view) {
-  ['op-menu', 'op-waiting', 'op-joining'].forEach(id => {
+  // Hide both sub-panels
+  ['op-waiting', 'op-joining'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
-  if (view === 'menu')    document.getElementById('op-menu').style.display    = 'block';
   if (view === 'waiting') document.getElementById('op-waiting').style.display = 'block';
   if (view === 'joining') document.getElementById('op-joining').style.display = 'block';
   document.getElementById('online-overlay').classList.toggle('on', view !== 'none');
+
+  // Collapse the landing expand-row when overlay opens, restore when it closes
+  if (view === 'none') {
+    // don't auto-reopen row — user can re-click btn-online
+  }
 }
 
 
@@ -3217,12 +3251,10 @@ function setupExit() {
   syncBoardToScene(chess);
 
   // Return to the right place based on where we came from
+  ui.landing.style.display = 'flex';
   if (pendingSetupMode === 'online') {
-    // Show landing behind the overlay (so ← Back on op-menu works)
-    ui.landing.style.display = 'flex';
-    showOnlinePanel('menu');
-  } else {
-    ui.landing.style.display = 'flex';
+    // Re-open the online expand-row so user can see their options
+    document.getElementById('row-online').classList.add('open');
   }
 }
 
@@ -3648,27 +3680,54 @@ document.querySelectorAll('[data-c]').forEach(btn => btn.addEventListener('click
 // Landing menu buttons
 document.getElementById('btn-ai').addEventListener('click', () => {
   const isOpen = document.getElementById('row-ai').classList.toggle('open');
+  // Close online row whenever AI row is toggled
+  document.getElementById('row-online').classList.remove('open');
   if (isOpen) SFX.btnStart(); else SFX.btnBack();
 });
 
+// ── btn-online: toggle expand-row (same pattern as btn-ai) ──
 document.getElementById('btn-online').addEventListener('click', () => {
+  pendingCustomBoard = null;
+  const row    = document.getElementById('row-online');
+  const isOpen = row.classList.toggle('open');
+  // Close AI row if opening online row
+  if (isOpen) document.getElementById('row-ai').classList.remove('open');
   SFX.btnOnline();
-  pendingCustomBoard = null; // clear any leftover custom board
-  showOnlinePanel('menu');
 });
 
-// Online overlay buttons
-document.getElementById('op-back-menu')  .addEventListener('click', () => { SFX.btnBack();   showOnlinePanel('none'); });
-document.getElementById('op-create-btn') .addEventListener('click', () => {
+// Online expand-row action buttons
+document.getElementById('op-create-btn').addEventListener('click', () => {
   SFX.btnOnline();
-  pendingCustomBoard = null; // standard game — no custom board
+  pendingCustomBoard = null;
+  document.getElementById('row-online').classList.remove('open');
   createRoom();
 });
-// "Create Room — Custom Setup": go to board editor first, then create room when done
 document.getElementById('op-create-setup-btn').addEventListener('click', () => {
   SFX.btnOnline();
-  // Enter setup in online mode — button will say "Create Room"
+  document.getElementById('row-online').classList.remove('open');
   setupEnter('online', W, chosenDiff, chosenOnlineTimer);
+});
+document.getElementById('op-join-btn').addEventListener('click', () => {
+  SFX.btnClick();
+  document.getElementById('row-online').classList.remove('open');
+  document.getElementById('op-code-input').value = '';
+  document.getElementById('op-join-status').textContent = '\u00a0';
+  showOnlinePanel('joining');
+  setTimeout(() => document.getElementById('op-code-input').focus(), 100);
+});
+
+// Engine toggle in AI expand-row
+document.getElementById('btn-engine-sf').addEventListener('click', () => {
+  useStockfish = true;
+  document.getElementById('btn-engine-sf').classList.add('active');
+  document.getElementById('btn-engine-mm').classList.remove('active');
+  SFX.toggle();
+});
+document.getElementById('btn-engine-mm').addEventListener('click', () => {
+  useStockfish = false;
+  document.getElementById('btn-engine-mm').classList.add('active');
+  document.getElementById('btn-engine-sf').classList.remove('active');
+  SFX.toggle();
 });
 // "Custom Setup →" in the AI expand panel
 document.getElementById('btn-setup-ai').addEventListener('click', () => {
@@ -3679,13 +3738,6 @@ document.getElementById('btn-setup-ai').addEventListener('click', () => {
   setupEnter('ai', W, chosenDiff, secs);
 });
 
-document.getElementById('op-join-btn').addEventListener('click', () => {
-  SFX.btnClick();
-  document.getElementById('op-code-input').value = '';
-  document.getElementById('op-join-status').textContent = ' ';
-  showOnlinePanel('joining');
-  setTimeout(() => document.getElementById('op-code-input').focus(), 100);
-});
 document.getElementById('op-connect-btn').addEventListener('click', () => {
   const code = document.getElementById('op-code-input').value.trim().toUpperCase();
   if (code.length !== 4) {
@@ -3711,10 +3763,15 @@ document.getElementById('op-code').addEventListener('click', () => {
 document.getElementById('op-cancel-wait').addEventListener('click', () => {
   SFX.btnBack();
   closePeer();
-  pendingCustomBoard = null; // discard any custom board if host cancels waiting
+  pendingCustomBoard = null;
   showOnlinePanel('none');
 });
-document.getElementById('op-cancel-join').addEventListener('click', () => { SFX.btnBack(); showOnlinePanel('menu'); });
+// Cancel join → close overlay, re-open landing row
+document.getElementById('op-cancel-join').addEventListener('click', () => {
+  SFX.btnBack();
+  showOnlinePanel('none');
+  document.getElementById('row-online').classList.add('open');
+});
 
 // ── Setup Mode buttons ───────────────────────────────────
 // Piece palette chips
