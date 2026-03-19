@@ -204,7 +204,14 @@
     <button class="btn btn-primary" id="btn-ai">Play vs AI</button>
     <div class="expand-row" id="row-ai">
 
-      <div class="row-label">Engine</div>
+      <div class="row-label" style="margin-top:4px">Theme</div>
+      <div class="opt-row">
+        <button class="obtn theme-chip active" data-theme="classic">Classic</button>
+        <button class="obtn theme-chip"        data-theme="marble">Marble</button>
+        <button class="obtn theme-chip"        data-theme="neon">Neon</button>
+      </div>
+
+      <div class="row-label" style="margin-top:4px">Engine</div>
       <div class="opt-row">
         <button class="obtn active" id="btn-engine-sf"  data-engine="sf">Stockfish</button>
         <button class="obtn"        id="btn-engine-mm"  data-engine="mm">Minimax</button>

@@ -30,6 +30,14 @@ canvas.addEventListener('touchend', e => {
   else handleSquareClick(sq.r, sq.f);
 }, { passive: false });
 
+// Theme chips
+document.querySelectorAll('.theme-chip').forEach(btn => {
+  btn.addEventListener('click', () => {
+    applyTheme(btn.dataset.theme);
+    SFX.toggle();
+  });
+});
+
 // AI difficulty buttons
 let chosenDiff = 1;
 document.querySelectorAll('[data-d]').forEach(btn => btn.addEventListener('click', () => {

@@ -144,3 +144,113 @@ for (let r = 0; r < 8; r++) {
   }
 }
 
+
+// ── Board Themes ──────────────────────────────────────────────────
+// Each theme defines: light square, dark square, white piece, black piece,
+// outline colors, and fresnel tint.
+const BOARD_THEMES = {
+  classic: {
+    name:        'Classic',
+    lightSq:     0xddd090,
+    darkSq:      0x0b0118,
+    whitePiece:  0xeee8ff,
+    blackPiece:  0x110022,
+    whiteEmit:   0x110022,
+    blackEmit:   0x220011,
+    whiteOutline:0x220044,
+    blackOutline:0xffaaff,
+    whiteFresnelColor: 0xffffff,
+    blackFresnelColor: 0xff88ff,
+  },
+  marble: {
+    name:        'Marble',
+    lightSq:     0xe8e0d4,
+    darkSq:      0x3a3028,
+    whitePiece:  0xf5f0eb,
+    blackPiece:  0x1a1410,
+    whiteEmit:   0x332211,
+    blackEmit:   0x110800,
+    whiteOutline:0x443322,
+    blackOutline:0xccaa88,
+    whiteFresnelColor: 0xfff8f0,
+    blackFresnelColor: 0xffcc88,
+  },
+  neon: {
+    name:        'Neon',
+    lightSq:     0x001a2e,
+    darkSq:      0x000a14,
+    whitePiece:  0x00ffcc,
+    blackPiece:  0xff0088,
+    whiteEmit:   0x00ffcc,
+    blackEmit:   0xff0088,
+    whiteOutline:0x00ffcc,
+    blackOutline:0xff0088,
+    whiteFresnelColor: 0x00ffff,
+    blackFresnelColor: 0xff00aa,
+  },
+};
+
+let activeTheme = 'classic';
+
+function applyTheme(themeKey) {
+  const t = BOARD_THEMES[themeKey];
+  if (!t) return;
+  activeTheme = themeKey;
+
+  // Update board square colors
+  lightSquareMat.color.setHex(t.lightSq);
+  darkSquareMat.color.setHex(t.darkSq);
+
+  // Respawn all pieces with new geometry + colors for this theme.
+  // syncBoardToScene reads the live chess board state.
+  if (typeof chess !== 'undefined' && typeof syncBoardToScene === 'function') {
+    syncBoardToScene(chess);
+    if (typeof orientAllKnights === 'function') orientAllKnights();
+  }
+
+  // Save preference
+  try { localStorage.setItem('chessTheme', themeKey); } catch(e) {}
+
+  // Update UI chips
+  document.querySelectorAll('.theme-chip').forEach(el => {
+    el.classList.toggle('active', el.dataset.theme === themeKey);
+  });
+}
+
+
+// Override makePieceMaterial + makeFresnelMaterial to read active theme colors.
+// These are declared as functions in pieces.js (loaded before scene.js),
+// so reassigning them here updates the global reference for all future calls.
+makePieceMaterial = function(isWhite) {
+  const t = BOARD_THEMES[activeTheme];
+  return new THREE.MeshStandardMaterial({
+    color:             isWhite ? t.whitePiece  : t.blackPiece,
+    roughness:         isWhite ? .92 : .88,
+    metalness:         0,
+    emissive:          new THREE.Color(isWhite ? t.whiteEmit : t.blackEmit),
+    emissiveIntensity: activeTheme === 'neon' ? 0.4 : 0.04,
+  });
+};
+
+makeFresnelMaterial = function(isWhite) {
+  const t = BOARD_THEMES[activeTheme];
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color(isWhite ? t.whiteFresnelColor : t.blackFresnelColor) },
+      uPower: { value: isWhite ? 2.2 : 2.0 },
+      uStr:   { value: isWhite ? 0.9 : 1.1 },
+    },
+    vertexShader:   FRESNEL_VERT,
+    fragmentShader: FRESNEL_FRAG,
+    transparent: true,
+    blending:    THREE.AdditiveBlending,
+    depthWrite:  false,
+    side:        THREE.FrontSide,
+  });
+};
+
+// Also override the outline color used in buildPieceMesh
+function getOutlineColor(isWhite) {
+  const t = BOARD_THEMES[activeTheme];
+  return isWhite ? t.whiteOutline : t.blackOutline;
+}

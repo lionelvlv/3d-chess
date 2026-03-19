@@ -39,3 +39,9 @@ document.getElementById('gameover').classList.remove('on');
 // On file:// the fetch fails silently and minimax is used instead.
 initStockfish();
 
+// Restore saved theme preference
+try {
+  const saved = localStorage.getItem('chessTheme');
+  if (saved && BOARD_THEMES[saved]) applyTheme(saved);
+} catch(e) {}
+

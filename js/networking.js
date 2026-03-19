@@ -1,51 +1,41 @@
 //  9. NETWORKING — PeerJS WebRTC peer-to-peer
-//
-//  PeerJS is loaded LAZILY on first use (createRoom / joinRoom).
-//  It is never loaded on page init, so file:// users don't see the
-//  "Unsafe attempt to load URL" iframe error that PeerJS triggers
-//  when its script tag is present at startup.
-//
-//  loadPeerJS() injects a <script> tag once and returns a Promise
-//  that resolves when the library is ready. Subsequent calls resolve
-//  immediately from the cached promise.
 // ═══════════════════════════════════════════
 
 let peer       = null;
 let conn       = null;
 let onlineRole = null; // 'host' | 'guest'
 
+// Use the free PeerJS cloud broker (0.peerjs.com) as signalling + TURN fallback.
+// This gives much better NAT traversal than bare STUN servers alone.
 const PEER_CONFIG = {
+  host:   '0.peerjs.com',
+  port:   443,
+  path:   '/',
+  secure: true,
   config: {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:global.stun.twilio.com:3478' },
     ],
   },
 };
 
 // ── Lazy PeerJS loader ────────────────────────────────────────────
-// Returns a Promise that resolves when window.Peer is available.
-// Safe to call multiple times — the script tag is only injected once.
 let _peerJsPromise = null;
 
 function loadPeerJS() {
   if (_peerJsPromise) return _peerJsPromise;
-
-  // Already loaded (e.g. included via a static script tag in some environments)
   if (typeof Peer !== 'undefined') {
     _peerJsPromise = Promise.resolve();
     return _peerJsPromise;
   }
-
   _peerJsPromise = new Promise((resolve, reject) => {
-    const script  = document.createElement('script');
-    script.src    = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
-    script.onload  = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load PeerJS'));
-    document.head.appendChild(script);
+    const s    = document.createElement('script');
+    s.src      = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+    s.onload   = () => resolve();
+    s.onerror  = () => reject(new Error('Failed to load PeerJS'));
+    document.head.appendChild(s);
   });
-
   return _peerJsPromise;
 }
 
@@ -78,7 +68,7 @@ function createRoom() {
   updateInviteDisplay(code);
 
   loadPeerJS().then(() => {
-    stat.innerHTML = '<span class="spinner">↻</span> CONNECTING...';
+    stat.innerHTML = '<span class="spinner">↻</span> CONNECTING TO SERVER...';
     peer = new Peer(roomCodeToPeerId(code), PEER_CONFIG);
 
     peer.on('open', () => {
@@ -88,9 +78,10 @@ function createRoom() {
     peer.on('connection', incomingConn => {
       conn       = incomingConn;
       onlineRole = 'host';
-      setupConnectionHandlers();
 
+      // Wait for connection to fully open before wiring handlers + sending start
       conn.on('open', () => {
+        setupConnectionHandlers();
         const ts  = chosenOnlineTimer;
         const msg = { type: 'start', guestColor: B, timerSecs: ts };
         if (pendingCustomBoard) msg.customBoard = pendingCustomBoard;
@@ -126,25 +117,45 @@ function joinRoom(code) {
   stat.innerHTML = '<span class="spinner">↻</span> LOADING...';
   stat.className = 'op-status';
 
+  // Connection timeout — if not connected in 15s, show a useful error
+  let connectTimeout = setTimeout(() => {
+    if (!conn || conn.open === false) {
+      stat.textContent = 'TIMED OUT — check the room code and try again';
+      stat.className   = 'op-status err';
+      closePeer();
+    }
+  }, 15000);
+
   loadPeerJS().then(() => {
-    stat.innerHTML = '<span class="spinner">↻</span> CONNECTING...';
+    stat.innerHTML = '<span class="spinner">↻</span> CONNECTING TO SERVER...';
     peer = new Peer(undefined, PEER_CONFIG);
 
     peer.on('open', () => {
-      conn = peer.connect(roomCodeToPeerId(code), { reliable: true });
-      setupConnectionHandlers();
+      stat.innerHTML = '<span class="spinner">↻</span> CONNECTING TO HOST...';
+      conn = peer.connect(roomCodeToPeerId(code), { reliable: true, serialization: 'json' });
+
       conn.on('open', () => {
+        clearTimeout(connectTimeout);
         stat.textContent = 'CONNECTED! WAITING FOR HOST...';
         stat.className   = 'op-status ok';
+        setupConnectionHandlers();
+      });
+
+      conn.on('error', err => {
+        clearTimeout(connectTimeout);
+        stat.textContent = 'CONNECTION ERROR: ' + (err.message || err.type || err);
+        stat.className   = 'op-status err';
       });
     });
 
     peer.on('error', err => {
+      clearTimeout(connectTimeout);
       stat.textContent = 'ERR: ' + err.type;
       stat.className   = 'op-status err';
     });
 
   }).catch(err => {
+    clearTimeout(connectTimeout);
     stat.textContent = 'Could not load networking library.';
     stat.className   = 'op-status err';
     console.warn('[Chess Arcade] PeerJS failed to load:', err.message);

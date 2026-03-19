@@ -188,3 +188,8 @@
 
 
 /* ═══════════════════════════════════════════
+
+/* Theme chips — coloured dot accent */
+.theme-chip[data-theme="classic"].active { color:#ddd090; border-color:#ddd090; background:rgba(221,208,144,.12); }
+.theme-chip[data-theme="marble"].active  { color:#e8e0d4; border-color:#e8e0d4; background:rgba(232,224,212,.12); }
+.theme-chip[data-theme="neon"].active    { color:#00ffcc; border-color:#00ffcc; background:rgba(0,255,204,.10); }
