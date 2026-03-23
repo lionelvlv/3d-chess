@@ -1,4 +1,19 @@
+## Features
+- Stockfish AI
+- Online Multiplayer
+- Timed Chess
+- Themes
+- Board Customization
+
 # Chess Arcade
+Landing Page
+![Landing Page](https://i.imgur.com/zPisX9P.png)
+
+Chess Game
+![Chess Game](https://i.imgur.com/zs0oM43.png)
+
+Board Customization
+![Board Customization](https://i.imgur.com/7TeXriq.png)
 
 ## File structure
 
