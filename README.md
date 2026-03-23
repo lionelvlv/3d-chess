@@ -1,3 +1,5 @@
+# Chess Arcade
+
 ## Features
 - Stockfish AI
 - Online Multiplayer
@@ -5,7 +7,6 @@
 - Themes
 - Board Customization
 
-# Chess Arcade
 Landing Page
 ![Landing Page](https://i.imgur.com/zPisX9P.png)
 
