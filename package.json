@@ -1,0 +1,9 @@
+{
+  "name": "3d-chess",
+  "private": true,
+  "description": "3D chess in the browser with a custom rules engine, Stockfish AI and P2P multiplayer",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=20" }
+}
