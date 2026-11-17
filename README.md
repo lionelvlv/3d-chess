@@ -4,6 +4,7 @@
 - [Technical Specification](docs/SPEC.md)
 - [Development Notes](development.md)
 - [Features](features.md)
+- [AI Disclosure](docs/AI_DISCLOSURE.md)
 
 ## Features
 - Full 3D interactive board rendered via Three.js with orbit controls and lighting.
