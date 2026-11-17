@@ -1,39 +1,22 @@
-# Chess Arcade
+# 3D Chess
 
-## File structure
+A browser-based 3D chess game built with Three.js and vanilla JavaScript.
 
-```
-chess-arcade/
-├── index.html          Main HTML shell
-├── css/
-│   ├── base.css        Design tokens, reset, typography
-│   ├── landing.css     Landing screen, menu, buttons
-│   ├── overlay.css     HUD, overlays, game over, setup
-│   └── effects.css     History panel, animations, responsive
-└── js/
-    ├── engine.js       Chess rules engine
-    ├── ai.js           Stockfish + minimax AI
-    ├── audio.js        Web Audio SFX
-    ├── scene.js        Three.js scene setup
-    ├── pieces.js       3D piece geometry
-    ├── highlights.js   Selection + legal move display
-    ├── particles.js    Visual effects
-    ├── raycasting.js   Click → board square
-    ├── networking.js   PeerJS WebRTC (lazy loaded)
-    ├── timer.js        Chess clocks
-    ├── game.js         Game controller
-    ├── setup.js        Custom board editor
-    ├── history.js      Move notation panel
-    ├── ghost.js        Ghost piece trail
-    ├── invite.js       Invite link / URL auto-join
-    ├── cats.js         Cat button easter egg
-    ├── events.js       All event listeners
-    └── main.js         Render loop + boot
-```
+## Documentation & Specs
+- [Technical Specification](docs/SPEC.md)
+- [Development Notes](development.md)
+- [Features](features.md)
 
-## Notes for developers
+## Features
+- Full 3D interactive board rendered via Three.js with orbit controls and lighting.
+- Complete chess rules engine (legal moves, check, checkmate, castling, en passant, promotion).
+- Raycasting-based piece selection and movement.
+- Clean vanilla JavaScript / ES6 modular architecture.
 
-- All JS files share one global scope — no ES modules, no bundler needed
-- Load order matters — see `<script>` tags in `index.html`
-- PeerJS is lazy-loaded only when a room is created/joined (not on page load)
-- Stockfish loads only on HTTPS via fetch→blob→Worker pattern
+## Tech Stack
+- **Rendering:** Three.js / WebGL
+- **Core:** Vanilla JavaScript (ES6), HTML5, CSS3
+- **Testing:** Vitest / custom unit tests (`tests/`)
+
+## Getting Started
+1. Open `index.html` in any modern web browser or serve via a local static server (e.g., `npx serve .`).
