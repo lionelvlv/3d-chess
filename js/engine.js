@@ -102,13 +102,14 @@ class Chess {
     } else if (pc.t === PT.K) {
       for (const [dr,df] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]])
         push(r0+dr, f0+df);
-      // Castling (only if king hasn't moved)
-      if (!pc.m) {
+      // Castling: unmoved king and same-colour rook on their home squares.
+      // The square check matters for custom setups, where every piece starts with m:0.
+      if (!pc.m && f0 === 4 && r0 === (pc.c === W ? 0 : 7)) {
         const rk = this.bd[r0][7];
-        if (rk && rk.t === PT.R && !rk.m && !this.bd[r0][5] && !this.bd[r0][6])
+        if (rk && rk.t === PT.R && rk.c === pc.c && !rk.m && !this.bd[r0][5] && !this.bd[r0][6])
           mv.push({ fr:{r:r0,f:f0}, to:{r:r0,f:6}, sp:'cK' });
         const rq = this.bd[r0][0];
-        if (rq && rq.t === PT.R && !rq.m && !this.bd[r0][1] && !this.bd[r0][2] && !this.bd[r0][3])
+        if (rq && rq.t === PT.R && rq.c === pc.c && !rq.m && !this.bd[r0][1] && !this.bd[r0][2] && !this.bd[r0][3])
           mv.push({ fr:{r:r0,f:f0}, to:{r:r0,f:2}, sp:'cQ' });
       }
     }
